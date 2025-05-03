@@ -1,6 +1,7 @@
 #define SDL_MAIN_HANDLED
 #include "JaDraw.h"
 #include "TestSprite.h"
+#include "luigi.h"
 #include <SDL.h>
 #include <iostream>
 #include <vector>
@@ -28,8 +29,9 @@ void update(float dt) {
     if (x >= CANVAS_WIDTH) x = 0;
     if (y >= CANVAS_HEIGHT) y = 0;
     jdrw.drawSprite(1, 1, Sprites::test_sprite, DrawMode::BLEND);
-    jdrw.drawLine(0, 0, static_cast<int>(x), static_cast<int>(y), 1, Colors::Brown);
-    jdrw.drawLineAA(CANVAS_WIDTH-1, 0, CANVAS_WIDTH-x, y, Colors::Cyan);
+    jdrw.drawLine(0, 0, static_cast<int>(x), static_cast<int>(y), 1, Colors::Brown, DrawMode::ADDITIVE);
+    jdrw.drawLineAA(CANVAS_WIDTH-1, 0, CANVAS_WIDTH-x, y, Colors::Cyan, DrawMode::ADDITIVE);
+    jdrw.drawSprite(static_cast<int>(x), static_cast<int>(y), Sprites::luigi, DrawMode::ADDITIVE);
 }
 
 int main(int argc, char* argv[]) {
