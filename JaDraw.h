@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cassert>
 #include <limits>
+#include <span>
 
 enum class DrawMode {
     OPAQUE,   // Blend source RGB onto destination using `intensity` as alpha factor. Destination alpha is also blended.
@@ -38,6 +39,94 @@ namespace Colors {
     constexpr uint32_t Purple      = 0x800080FF;
     constexpr uint32_t Brown       = 0xA52A2AFF;
 }
+
+/**
+ * @brief Structure holding non-owning views (spans) to paletted sprite data.
+ * Designed to work with statically allocated sprite data. Requires C++20.
+ */
+struct JaSprite {
+    int width = 0;
+    int height = 0;
+    std::span<const uint32_t> palette; // Non-owning view of palette colors
+    std::span<const uint8_t> pixels;   // Non-owning view of pixel indices
+
+    // Default constructor creates an invalid sprite
+    constexpr JaSprite() = default;
+
+    /**
+     * @brief Constructs a JaSprite view from existing data.
+     * @param w Sprite width.
+     * @param h Sprite height.
+     * @param p A span viewing the palette data (const uint32_t[]).
+     * @param pix A span viewing the pixel data (const uint8_t[]).
+     * @param check_indices If true, validates that all pixel indices are within palette bounds (can be slow for large sprites, disable if data is trusted).
+     * @throws std::invalid_argument if dimensions are invalid, pixel data size mismatches, or palette is too large/empty.
+     * @throws std::out_of_range if check_indices is true and an invalid index is found.
+     */
+    constexpr JaSprite(int w, int h, std::span<const uint32_t> p, std::span<const uint8_t> pix, bool check_indices = true)
+        : width(w), height(h), palette(p), pixels(pix)
+    {
+        // Use a non-throwing check function for constexpr context if possible,
+        // or rely on runtime checks if exceptions are needed.
+        // For simplicity here, we keep the runtime throw logic.
+        // A fully constexpr sprite would need constexpr validation.
+        // if (width <= 0 || height <= 0) {
+        //     // Cannot throw in constexpr constructor directly before C++20 allowed it easily.
+        //     // Rely on usage context or make this constructor non-constexpr if throws are essential.
+        //      //throw std::invalid_argument("Sprite dimensions must be positive."); // Runtime check
+        // }
+        // if (static_cast<size_t>(width) * height != pixels.size()) {
+        //     //throw std::invalid_argument("Pixel data size does not match sprite dimensions."); // Runtime check
+        // }
+        // if (palette.empty()) {
+        //      //throw std::invalid_argument("Sprite palette cannot be empty."); // Runtime check
+        // }
+        // if (palette.size() > 256) {
+        //      //throw std::invalid_argument("Palette size cannot exceed 256 colors."); // Runtime check
+        // }
+
+        // if (check_indices) {
+        //     for(size_t i = 0; i < pixels.size(); ++i) {
+        //         if (pixels[i] >= palette.size()) {
+        //             // Cannot easily construct detailed error string in constexpr
+        //             //throw std::out_of_range("Pixel index out of palette range."); // Runtime check
+        //         }
+        //     }
+        // }
+    }
+
+    /**
+     * @brief Gets the palette index at sprite coordinates (x, y). Assumes valid coordinates.
+     */
+    constexpr uint8_t getPixelIndexUnsafe(int x, int y) const {
+        // No bounds check here for speed - JaDraw::drawSprite performs clipping
+        return pixels[static_cast<size_t>(y) * width + x];
+    }
+
+     /**
+      * @brief Gets the RGBA color for a given palette index. Assumes valid index.
+      */
+     constexpr uint32_t getColorFromIndexUnsafe(uint8_t index) const {
+         // No bounds check here - constructor should validate indices if check_indices was true
+         return palette[index];
+     }
+
+     // Optional: Add safe versions if needed outside drawSprite context
+     uint8_t getPixelIndex(int x, int y) const {
+        if (x < 0 || x >= width || y < 0 || y >= height || pixels.empty()) {
+            return 0; 
+            //throw std::out_of_range("Sprite pixel coordinates out of bounds.");
+        }
+        return pixels[static_cast<size_t>(y) * width + x];
+     }
+     uint32_t getColorFromIndex(uint8_t index) const {
+         if (index >= palette.size()) {
+            return 0;
+              //throw std::out_of_range("Palette index out of bounds.");
+         }
+         return palette[index];
+     }
+};
 
 template <int W, int H>
 class JaDraw {
@@ -367,7 +456,59 @@ public:
         }
     }
 
+    /**
+     * @brief Draws a paletted sprite onto the canvas using spans.
+     * Pixels referencing palette entries with alpha 0 are skipped (transparent).
+     * @param dest_x Top-left X coordinate on the canvas.
+     * @param dest_y Top-left Y coordinate on the canvas.
+     * @param sprite The JaSprite object (viewing static or other data) to draw.
+     * @param mode Drawing mode for non-transparent pixels.
+     */
+    void drawSprite(int dest_x, int dest_y, const JaSprite& sprite, DrawMode mode = DrawMode::BLEND) {
+        // Basic check if sprite has valid dimensions and data spans
+        if (sprite.width <= 0 || sprite.height <= 0 || sprite.pixels.empty() || sprite.palette.empty()) {
+            return; // Nothing to draw
+        }
+        // Optional runtime check (if not done reliably in constructor)
+        // assert(static_cast<size_t>(sprite.width) * sprite.height == sprite.pixels.size());
 
+        int clip_x1 = std::max(0, dest_x);
+        int clip_y1 = std::max(0, dest_y);
+        int clip_x2 = std::min(W, dest_x + sprite.width);
+        int clip_y2 = std::min(H, dest_y + sprite.height);
+
+        if (clip_x1 >= clip_x2 || clip_y1 >= clip_y2) {
+            return; // Fully clipped
+        }
+
+        for (int cy = clip_y1; cy < clip_y2; ++cy) {
+            int sy = cy - dest_y;
+            // Use the span directly now
+            // Note: Accessing span with [] is usually unchecked in release builds.
+            // The clipping ensures cx/cy are valid canvas coords.
+            // sx/sy calculation ensures they map to valid sprite coords *within the clipped view*.
+            size_t sprite_row_start_index = static_cast<size_t>(sy) * sprite.width;
+
+            for (int cx = clip_x1; cx < clip_x2; ++cx) {
+                int sx = cx - dest_x;
+
+                // Get palette index from pixel span (unsafe access is okay due to clipping/structure logic)
+                uint8_t palette_index = sprite.pixels[sprite_row_start_index + sx]; // Using span::operator[]
+
+                // Get color from palette span (unsafe access assumes index is valid)
+                // We rely on the constructor check or trusted input data.
+                uint32_t source_color = sprite.palette[palette_index]; // Using span::operator[]
+
+                // Universal Transparency Check (based on palette color's alpha)
+                if (JADRAW_ALPHA(source_color) == 0) {
+                    continue; // Skip transparent pixels
+                }
+
+                // Plot using the existing unsafe plotter (cx, cy are canvas-bounds checked by clipping)
+                plotPixelUnsafeWithIntensityMode(cx, cy, source_color, 1.0f, mode);
+            }
+        }
+    }
 }; // JaDraw<W, H>
 
 

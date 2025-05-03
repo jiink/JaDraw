@@ -1,9 +1,11 @@
 #define SDL_MAIN_HANDLED
 #include "JaDraw.h"
+#include "TestSprite.h"
 #include <SDL.h>
 #include <iostream>
 #include <vector>
 #include <stdexcept>
+#include <span>
 
 constexpr int CANVAS_WIDTH = 64;
 constexpr int CANVAS_HEIGHT = 48;
@@ -25,12 +27,15 @@ void update(float dt) {
 
     if (x >= CANVAS_WIDTH) x = 0;
     if (y >= CANVAS_HEIGHT) y = 0;
-
+    jdrw.drawSprite(1, 1, Sprites::test_sprite, DrawMode::BLEND);
     jdrw.drawLine(0, 0, static_cast<int>(x), static_cast<int>(y), 1, Colors::Brown);
     jdrw.drawLineAA(CANVAS_WIDTH-1, 0, CANVAS_WIDTH-x, y, Colors::Cyan);
 }
 
 int main(int argc, char* argv[]) {
+    #if __cplusplus < 202002L
+        #error "This code requires C++20 for std::span"
+    #endif
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
         return 1;
