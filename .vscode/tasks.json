@@ -9,8 +9,7 @@
                 "-g",
                 "-o",
                 "main.exe",
-                "main.cpp",
-                "JaDraw.cpp"
+                "main.cpp"
             ],
             "group": {
                 "kind": "build",
