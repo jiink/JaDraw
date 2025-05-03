@@ -9,7 +9,11 @@
                 "-g",
                 "-o",
                 "main.exe",
-                "main.cpp"
+                "main.cpp",
+                "-I./SDL2/include/SDL2",
+                "-L./SDL2/lib",
+                "-lSDL2",
+                "-lSDL2main"
             ],
             "group": {
                 "kind": "build",

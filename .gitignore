@@ -30,3 +30,5 @@
 *.exe
 *.out
 *.app
+/SDL2/include
+/SDL2/lib
