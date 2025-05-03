@@ -26,7 +26,8 @@ void update(float dt) {
     if (x >= CANVAS_WIDTH) x = 0;
     if (y >= CANVAS_HEIGHT) y = 0;
 
-    jdrw.drawLine(0, 0, static_cast<int>(x), static_cast<int>(y), 1, 0xFFFF0000);
+    jdrw.drawLine(0, 0, static_cast<int>(x), static_cast<int>(y), 1, 0xFFFF00FF);
+    jdrw.drawLineAA(CANVAS_WIDTH-1, 0, x, y, 0xFFFF00FF);
 }
 
 int main(int argc, char* argv[]) {
