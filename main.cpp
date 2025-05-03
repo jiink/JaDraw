@@ -49,11 +49,11 @@ int main(int argc, char* argv[]) {
     }
 
     // Create an SDL texture that we will update with our canvas data
-    // SDL_PIXELFORMAT_ARGB8888 is often a good match for uint32_t color format
-    // (Alpha, Red, Green, Blue - check SDL docs if colors seem swapped, might need ABGR etc.)
+    // SDL_PIXELFORMAT_RGBA8888 is often a good match for uint32_t color format
+    // (Red, Green, Blue, Alpha - check SDL docs if colors seem swapped, might need ABGR etc.)
     SDL_Texture* texture = SDL_CreateTexture(
         renderer,
-        SDL_PIXELFORMAT_ARGB8888, // Or SDL_PIXELFORMAT_RGBA8888 etc. depending on uint32_t mapping
+        SDL_PIXELFORMAT_RGBA8888, // Changed from ARGB to RGBA
         SDL_TEXTUREACCESS_STREAMING, // We'll be updating it frequently from CPU
         CANVAS_WIDTH, CANVAS_HEIGHT
     );
@@ -67,13 +67,13 @@ int main(int argc, char* argv[]) {
 
     // --- Initial Drawing Example ---
     // Draw something on the canvas before the loop starts
-    jdrw.drawPixel(0, 0, 0xFFFF0000); // Red pixel at top-left (ARGB format assumed)
+    jdrw.drawPixel(0, 0, 0xFF0000FF); // Red pixel at top-left (RGBA format)
     jdrw.drawPixel(CANVAS_WIDTH - 1, 0, 0xFF00FF00); // Green at top-right
-    jdrw.drawPixel(0, CANVAS_HEIGHT - 1, 0xFF0000FF); // Blue at bottom-left
+    jdrw.drawPixel(0, CANVAS_HEIGHT - 1, 0xFFFF0000); // Blue at bottom-left
     jdrw.drawPixel(CANVAS_WIDTH - 1, CANVAS_HEIGHT - 1, 0xFFFFFFFF); // White at bottom-right
     // Draw a line
     for(int i = 0; i < CANVAS_WIDTH / 2; ++i) {
-        jdrw.drawPixel(i, i, 0xFFFFFF00); // Yellow diagonal
+        jdrw.drawPixel(i, i, 0xFFFF0000); // Yellow diagonal
     }
 
 
