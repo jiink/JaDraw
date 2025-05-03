@@ -18,7 +18,7 @@ void update(float dt) {
     static float x = 0, y = 0;
     static float speed = 10.0f;
 
-    jdrw.clear(0xFF333333);
+    jdrw.clear(0x001030FF);
 
     x += speed * dt;
     y += speed * dt;
@@ -26,8 +26,8 @@ void update(float dt) {
     if (x >= CANVAS_WIDTH) x = 0;
     if (y >= CANVAS_HEIGHT) y = 0;
 
-    jdrw.drawLine(0, 0, static_cast<int>(x), static_cast<int>(y), 1, 0xFFFF00FF);
-    jdrw.drawLineAA(CANVAS_WIDTH-1, 0, x, y, 0xFFFF00FF);
+    jdrw.drawLine(0, 0, static_cast<int>(x), static_cast<int>(y), 1, Colors::Brown);
+    jdrw.drawLineAA(CANVAS_WIDTH-1, 0, CANVAS_WIDTH-x, y, Colors::Cyan);
 }
 
 int main(int argc, char* argv[]) {
