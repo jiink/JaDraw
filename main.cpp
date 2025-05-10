@@ -7,32 +7,15 @@
 #include <vector>
 #include <stdexcept>
 #include <span>
-
-constexpr int CANVAS_WIDTH = 64;
-constexpr int CANVAS_HEIGHT = 48;
-
+#include "system.h"
+#include "Applet.h"
+const int CANVAS_WIDTH = WIDTH;
+const int CANVAS_HEIGHT = HEIGHT;
 const int SCREEN_SCALE = 10;
 const int SCREEN_WIDTH = CANVAS_WIDTH * SCREEN_SCALE;
 const int SCREEN_HEIGHT = CANVAS_HEIGHT * SCREEN_SCALE;
 
 JaDraw<CANVAS_WIDTH, CANVAS_HEIGHT> jdrw;
-
-void update(float dt) {
-    static float x = 0, y = 0;
-    static float speed = 10.0f;
-
-    jdrw.clear(0x001030FF);
-
-    x += speed * dt;
-    y += speed * dt;
-
-    if (x >= CANVAS_WIDTH) x = 0;
-    if (y >= CANVAS_HEIGHT) y = 0;
-    jdrw.drawSprite(1, 1, Sprites::test_sprite, DrawMode::BLEND);
-    jdrw.drawLine(0, 0, static_cast<int>(x), static_cast<int>(y), 1, Colors::Brown, DrawMode::ADDITIVE);
-    jdrw.drawLineAA(CANVAS_WIDTH-1, 0, CANVAS_WIDTH-x, y, Colors::Cyan, DrawMode::ADDITIVE);
-    jdrw.drawSprite(static_cast<int>(x), static_cast<int>(y), Sprites::luigi, DrawMode::ADDITIVE);
-}
 
 int main(int argc, char* argv[]) {
     #if __cplusplus < 202002L
@@ -80,15 +63,16 @@ int main(int argc, char* argv[]) {
     bool quit = false;
     SDL_Event e;
     float deltaTime = 0.016f;
-
+    MyApplet applet;
+    applet.setup();
     while (!quit) {
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
                 quit = true;
             }
         }
-
-        update(deltaTime);
+        InputData nothing;
+        applet.loop(jdrw, deltaTime, nothing);
 
         int pitch = CANVAS_WIDTH * sizeof(uint32_t);
         SDL_UpdateTexture(texture, NULL, jdrw.canvas.data(), pitch);
