@@ -45,7 +45,7 @@ void MyApplet::loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputData& in
     canvas.clear(0x001030FF);
     canvas.drawLineAA(0, 0, x, y, Colors::Red);
     canvas.drawLineAA(WIDTH - 1, 0, x, y, Colors::Orange);
-    canvas.drawText("hi.", 4, 4, 1.0f, Colors::Magenta);
+    canvas.drawText("hello?", 4, 4, 1.0f, Colors::Magenta);
 }
 
 const char* MyApplet::getName() const {

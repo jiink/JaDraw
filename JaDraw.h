@@ -51,7 +51,7 @@ namespace VectorFont {
 
     struct FontChar {
         std::span<const uint8_t> points; // Contains pointer and size implicitly
-
+        uint8_t width; // in grid units
         constexpr size_t size() const { return points.size(); }
         constexpr const uint8_t* data() const { return points.data(); }
     };
@@ -185,46 +185,76 @@ namespace VectorFont {
         constexpr std::array<uint8_t, 7> _rbrace    = { 0x00, 0x11, 0x13, 0x24, 0x15, 0x17, 0x08 }; // 0x7D }
         constexpr std::array<uint8_t, 5> _tilde     = { 0x10, 0x21, 0x12, 0x01, 0x10 }; // 0x7E ~
         constexpr std::array<uint8_t, 1> _del       = { LIFT }; // 0x7F DEL
+
+        constexpr uint8_t findCharWidth(std::span<const uint8_t> char_points) {
+            if (char_points.empty()) { // Should not happen with current definitions
+                return VectorFont::CHAR_WIDTH;
+            }
+            // Special case for a single LIFT instruction (e.g. our _space)
+            if (char_points.size() == 1 && char_points[0] == LIFT) {
+                return VectorFont::CHAR_WIDTH;
+            }
+
+            uint8_t max_x = 0;
+            bool has_visible_points = false;
+            for (uint8_t p : char_points) {
+                if (p != LIFT) {
+                    has_visible_points = true;
+                    uint8_t x_coord = (p >> 4) & 0x0F;
+                    if (x_coord > max_x) {
+                        max_x = x_coord;
+                    }
+                }
+            }
+            if (!has_visible_points) { // Only LIFT points, or empty after all
+                return VectorFont::CHAR_WIDTH;
+            }
+            return max_x + 1; // width is rightmost point's X-coordinate + 1 grid unit
+        }
     } // detail
 
+    // mfc is short for makeFontChar
+    constexpr FontChar mfc(std::span<const uint8_t> points_data) {
+        return {points_data, detail::findCharWidth(points_data)};
+    }
     // --- Public Font Character Lookup Table ---
     // Use std::array for the main lookup table.
     // Initialize FontChar using aggregate initialization; std::span can be
     // implicitly constructed from std::array.
     constexpr std::array<FontChar, FONT_CHAR_COUNT> font_chars = {{
-        {detail::_space},    {detail::_happy},    {detail::_sad},      {detail::_heart},      // 00-03
-        {detail::_diamond},  {detail::_club},     {detail::_spade},    {detail::_bullet},     // 04-07
-        {detail::_space},    {detail::_circle},   {detail::_space},    {detail::_space},      // 08-0B (BS, TAB)
-        {detail::_space},    {detail::_space},    {detail::_space},    {detail::_space},      // 0C-0F
-        {detail::_tri_R},    {detail::_tri_L},    {detail::_arrow_UD}, {detail::_space},      // 10-13
-        {detail::_space},    {detail::_space},    {detail::_space},    {detail::_space},      // 14-17
-        {detail::_arrow_U},  {detail::_arrow_D},  {detail::_arrow_R},  {detail::_arrow_L},    // 18-1B (CAN,EM,SUB,ESC)
-        {detail::_space},    {detail::_arrow_LR}, {detail::_tri_U},    {detail::_tri_D},      // 1C-1F
+        mfc(detail::_space),    mfc(detail::_happy),    mfc(detail::_sad),      mfc(detail::_heart),      // 00-03
+        mfc(detail::_diamond),  mfc(detail::_club),     mfc(detail::_spade),    mfc(detail::_bullet),     // 04-07
+        mfc(detail::_space),    mfc(detail::_circle),   mfc(detail::_space),    mfc(detail::_space),      // 08-0B (BS, TAB)
+        mfc(detail::_space),    mfc(detail::_space),    mfc(detail::_space),    mfc(detail::_space),      // 0C-0F
+        mfc(detail::_tri_R),    mfc(detail::_tri_L),    mfc(detail::_arrow_UD), mfc(detail::_space),      // 10-13
+        mfc(detail::_space),    mfc(detail::_space),    mfc(detail::_space),    mfc(detail::_space),      // 14-17
+        mfc(detail::_arrow_U),  mfc(detail::_arrow_D),  mfc(detail::_arrow_R),  mfc(detail::_arrow_L),    // 18-1B (CAN,EM,SUB,ESC)
+        mfc(detail::_space),    mfc(detail::_arrow_LR), mfc(detail::_tri_U),    mfc(detail::_tri_D),      // 1C-1F
         // ASCII (0x20 - 0x7F)
-        {detail::_space},  {detail::_expt},   {detail::_quote2}, {detail::_hash},      // 20-23
-        {detail::_dollar}, {detail::_pct},    {detail::_and},    {detail::_quote1},     // 24-27
-        {detail::_lparen}, {detail::_rparen}, {detail::_star},   {detail::_plus},       // 28-2B
-        {detail::_comma},  {detail::_dash},   {detail::_dot},    {detail::_slash},      // 2C-2F
-        {detail::_0},      {detail::_1},      {detail::_2},      {detail::_3},          // 30-33
-        {detail::_4},      {detail::_5},      {detail::_6},      {detail::_7},          // 34-37
-        {detail::_8},      {detail::_9},      {detail::_colon},  {detail::_semi},       // 38-3B
-        {detail::_less},   {detail::_equal},  {detail::_great},  {detail::_question},   // 3C-3F
-        {detail::_at},     {detail::_A},      {detail::_B},      {detail::_C},          // 40-43
-        {detail::_D},      {detail::_E},      {detail::_F},      {detail::_G},          // 44-47
-        {detail::_H},      {detail::_I},      {detail::_J},      {detail::_K},          // 48-4B
-        {detail::_L},      {detail::_M},      {detail::_N},      {detail::_O},          // 4C-4F
-        {detail::_P},      {detail::_Q},      {detail::_R},      {detail::_S},          // 50-53
-        {detail::_T},      {detail::_U},      {detail::_V},      {detail::_W},          // 54-57
-        {detail::_X},      {detail::_Y},      {detail::_Z},      {detail::_lbrack},     // 58-5B
-        {detail::_bslash}, {detail::_rbrack}, {detail::_carat},  {detail::_under},      // 5C-5F
-        {detail::_acute},  {detail::_a},      {detail::_b},      {detail::_c},          // 60-63
-        {detail::_d},      {detail::_e},      {detail::_f},      {detail::_g},          // 64-67
-        {detail::_h},      {detail::_i},      {detail::_j},      {detail::_k},          // 68-6B
-        {detail::_l},      {detail::_m},      {detail::_n},      {detail::_o},          // 6C-6F
-        {detail::_p},      {detail::_q},      {detail::_r},      {detail::_s},          // 70-73
-        {detail::_t},      {detail::_u},      {detail::_v},      {detail::_w},          // 74-77
-        {detail::_x},      {detail::_y},      {detail::_z},      {detail::_lbrace},     // 78-7B
-        {detail::_bar},    {detail::_rbrace}, {detail::_tilde},  {detail::_del},        // 7C-7F
+        mfc(detail::_space),  mfc(detail::_expt),   mfc(detail::_quote2), mfc(detail::_hash),      // 20-23
+        mfc(detail::_dollar), mfc(detail::_pct),    mfc(detail::_and),    mfc(detail::_quote1),     // 24-27
+        mfc(detail::_lparen), mfc(detail::_rparen), mfc(detail::_star),   mfc(detail::_plus),       // 28-2B
+        mfc(detail::_comma),  mfc(detail::_dash),   mfc(detail::_dot),    mfc(detail::_slash),      // 2C-2F
+        mfc(detail::_0),      mfc(detail::_1),      mfc(detail::_2),      mfc(detail::_3),          // 30-33
+        mfc(detail::_4),      mfc(detail::_5),      mfc(detail::_6),      mfc(detail::_7),          // 34-37
+        mfc(detail::_8),      mfc(detail::_9),      mfc(detail::_colon),  mfc(detail::_semi),       // 38-3B
+        mfc(detail::_less),   mfc(detail::_equal),  mfc(detail::_great),  mfc(detail::_question),   // 3C-3F
+        mfc(detail::_at),     mfc(detail::_A),      mfc(detail::_B),      mfc(detail::_C),          // 40-43
+        mfc(detail::_D),      mfc(detail::_E),      mfc(detail::_F),      mfc(detail::_G),          // 44-47
+        mfc(detail::_H),      mfc(detail::_I),      mfc(detail::_J),      mfc(detail::_K),          // 48-4B
+        mfc(detail::_L),      mfc(detail::_M),      mfc(detail::_N),      mfc(detail::_O),          // 4C-4F
+        mfc(detail::_P),      mfc(detail::_Q),      mfc(detail::_R),      mfc(detail::_S),          // 50-53
+        mfc(detail::_T),      mfc(detail::_U),      mfc(detail::_V),      mfc(detail::_W),          // 54-57
+        mfc(detail::_X),      mfc(detail::_Y),      mfc(detail::_Z),      mfc(detail::_lbrack),     // 58-5B
+        mfc(detail::_bslash), mfc(detail::_rbrack), mfc(detail::_carat),  mfc(detail::_under),      // 5C-5F
+        mfc(detail::_acute),  mfc(detail::_a),      mfc(detail::_b),      mfc(detail::_c),          // 60-63
+        mfc(detail::_d),      mfc(detail::_e),      mfc(detail::_f),      mfc(detail::_g),          // 64-67
+        mfc(detail::_h),      mfc(detail::_i),      mfc(detail::_j),      mfc(detail::_k),          // 68-6B
+        mfc(detail::_l),      mfc(detail::_m),      mfc(detail::_n),      mfc(detail::_o),          // 6C-6F
+        mfc(detail::_p),      mfc(detail::_q),      mfc(detail::_r),      mfc(detail::_s),          // 70-73
+        mfc(detail::_t),      mfc(detail::_u),      mfc(detail::_v),      mfc(detail::_w),          // 74-77
+        mfc(detail::_x),      mfc(detail::_y),      mfc(detail::_z),      mfc(detail::_lbrace),     // 78-7B
+        mfc(detail::_bar),    mfc(detail::_rbrace), mfc(detail::_tilde),  mfc(detail::_del),        // 7C-7F
     }};
 
     constexpr const FontChar& getCharDef(uint8_t code) {
@@ -720,7 +750,6 @@ public:
         float unit_size_px = scale; // Simpler: scale multiplies the base grid unit size
 
         // Calculate advance width and line height in pixels
-        int advance_x = (int)roundf(VectorFont::CHAR_WIDTH * unit_size_px);
         int advance_y = (int)roundf(VectorFont::CHAR_HEIGHT * unit_size_px);
 
         for (size_t i = 0; text[i] != '\0'; ++i) {
@@ -739,6 +768,7 @@ public:
             }
             // Get the character definition
             const VectorFont::FontChar& fontchar = VectorFont::getCharDef(c);
+            int advance_x = (int)roundf(fontchar.width * unit_size_px);
 
             bool last_point_valid = false;
             int last_sx = 0, last_sy = 0;
@@ -780,7 +810,7 @@ public:
             }
 
             // Advance cursor position for the next character
-            current_x += advance_x;
+            current_x += advance_x + 1;
         }
     }
 
