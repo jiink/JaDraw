@@ -195,9 +195,9 @@ private:
                 unsigned int scaled_src_b = static_cast<unsigned int>(src_b * intensity);
 
                 // Add and clamp
-                unsigned int add_r = std::min(255u, dest_r + scaled_src_r);
-                unsigned int add_g = std::min(255u, dest_g + scaled_src_g);
-                unsigned int add_b = std::min(255u, dest_b + scaled_src_b);
+                unsigned int add_r = std::min(255u, (unsigned int)(dest_r + scaled_src_r));
+                unsigned int add_g = std::min(255u, (unsigned int)(dest_g + scaled_src_g));
+                unsigned int add_b = std::min(255u, (unsigned int)(dest_b + scaled_src_b));
 
                 // Keep original destination alpha
                 dest_pixel = JADRAW_RGBA(add_r, add_g, add_b, dest_a);
