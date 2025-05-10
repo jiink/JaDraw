@@ -756,7 +756,72 @@ public:
         }
     }
 
-    void drawText(const char *text, float tx, float ty, float scale, uint32_t color)
+    /**
+     * @brief Multiplies the given color by a certain magnitude.
+     * 
+     * @param color 
+     * @param v < 1.0 will darken, 1.0 will have no effect, and <1.0 will intensify
+     */
+    uint32_t colorMultiply(uint32_t color, float v)
+    {
+        uint8_t newR = static_cast<uint8_t>(std::min(255.0f, JADRAW_RED(color) * v));
+        uint8_t newG = static_cast<uint8_t>(std::min(255.0f, JADRAW_GREEN(color) * v));
+        uint8_t newB = static_cast<uint8_t>(std::min(255.0f, JADRAW_BLUE(color) * v));
+        return JADRAW_RGBA(newR, newG, newB, JADRAW_ALPHA(color));
+    }
+
+    uint32_t colorFadeAlpha(uint32_t color, float v)
+    {
+        uint8_t newA = static_cast<uint8_t>(std::min(255.0f, JADRAW_ALPHA(color) * v));
+        return JADRAW_RGBA(JADRAW_RED(color), JADRAW_GREEN(color), JADRAW_BLUE(color), newA);
+    }
+
+    /**
+     * @brief Draws an antialiased dot.
+     */
+    void drawPoint(float x, float y, uint32_t color, DrawMode mode = DrawMode::BLEND)
+    {
+        // Top-left corner of the 1x1 "source" square centered at (x, y)
+        float sourceRectCornerX = x - 0.5f;
+        float sourceRectCornerY = y - 0.5f;
+
+        // Integer coordinates of the top-left *pixel cell* that sourceRectCornerX,Y falls into
+        // Note: floorf returns a float. If frameBufferAddPixV needs int coords,
+        // you might cast later or it handles it. The Vector2 suggests it takes floats.
+        float basePixelX = floorf(sourceRectCornerX);
+        float basePixelY = floorf(sourceRectCornerY);
+
+        // Fractional parts: how far sourceRectCornerX,Y is into the basePixelX,Y cell
+        float fx = sourceRectCornerX - basePixelX;
+        float fy = sourceRectCornerY - basePixelY;
+
+        // Calculate weights (areas of overlap) for the four potentially affected pixels
+        // These weights sum to 1.0
+        float weightTopLeft     = (1.0f - fx) * (1.0f - fy);
+        float weightTopRight    = fx * (1.0f - fy);
+        float weightBottomLeft  = (1.0f - fx) * fy;
+        float weightBottomRight = fx * fy;
+
+        // Set pixels, but only if they receive a non-zero contribution.
+        // This avoids unnecessary calculations and drawing fully transparent pixels.
+        // A small epsilon might be used for comparison if extreme precision is an issue,
+        // but for area weights, > 0.0f is usually fine.
+
+        if (weightTopLeft > 0.0f) {
+            drawPixel(basePixelX, basePixelY, colorFadeAlpha(color, weightTopLeft), mode);
+        }
+        if (weightTopRight > 0.0f) {
+            drawPixel(basePixelX + 1.0f, basePixelY, colorFadeAlpha(color, weightTopRight), mode);
+        }
+        if (weightBottomLeft > 0.0f) {
+            drawPixel(basePixelX, basePixelY + 1.0f, colorFadeAlpha(color, weightBottomLeft), mode);
+        }
+        if (weightBottomRight > 0.0f) {
+            drawPixel(basePixelX + 1.0f, basePixelY + 1.0f, colorFadeAlpha(color, weightBottomRight), mode);
+        }
+    }
+
+    void drawText(const char *text, float tx, float ty, float scale, uint32_t color, DrawMode mode = DrawMode::BLEND)
     {
         int thickness = (int)scale;
         if (scale <= 0.0f) return; // Scale must be positive
@@ -809,12 +874,12 @@ public:
 
                     if (last_point_valid) {
                         // Draw a line from the last point to the current point
-                        drawLineAA(last_sx, last_sy, sx, sy, color);
+                        drawLineAA(last_sx, last_sy, sx, sy, color, mode);
                     } else {
                         // This is the first point after a LIFT or the start of the character data.
                         // Check if it's a standalone point (i.e., the next item is LIFT or end of data)
                         if (pt_idx + 1 >= fontchar.size() || fontchar.points[pt_idx + 1] == VectorFont::LIFT) {
-                            drawPixel((int)sx, (int)sy, color);
+                            drawPoint(sx, sy, color, mode);
                         }
                         // If it's the start of a line segment (next point is not LIFT/end),
                         // we don't draw the point explicitly here. The olivec_line call
