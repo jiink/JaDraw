@@ -40,6 +40,203 @@ namespace Colors {
     constexpr uint32_t Brown       = 0xA52A2AFF;
 }
 
+namespace VectorFont {
+
+    constexpr uint8_t LIFT = 0xFF;
+    constexpr size_t FONT_CHAR_MIN = 0x00;
+    constexpr size_t FONT_CHAR_MAX = 0x7F;
+    constexpr size_t FONT_CHAR_COUNT = FONT_CHAR_MAX - FONT_CHAR_MIN + 1;
+    constexpr uint8_t CHAR_WIDTH = 6;
+    constexpr uint8_t CHAR_HEIGHT = 9;
+
+    struct FontChar {
+        std::span<const uint8_t> points; // Contains pointer and size implicitly
+
+        constexpr size_t size() const { return points.size(); }
+        constexpr const uint8_t* data() const { return points.data(); }
+    };
+
+    namespace detail {
+        constexpr std::array<uint8_t, 1> _space     = { LIFT }; // Character 0x00 (often NUL, using as space here)
+        constexpr std::array<uint8_t, 18> _happy    = { 0x10, 0x01, 0x05, 0x16, 0x46, 0x55, 0x51, 0x40, 0x10, LIFT, 0x22, LIFT, 0x32, LIFT, 0x14, 0x25, 0x35, 0x44 }; // 0x01
+        constexpr std::array<uint8_t, 18> _sad      = { 0x10, 0x01, 0x05, 0x16, 0x46, 0x55, 0x51, 0x40, 0x10, LIFT, 0x22, LIFT, 0x32, LIFT, 0x15, 0x24, 0x34, 0x45 }; // 0x02
+        constexpr std::array<uint8_t, 9> _heart     = { 0x10, 0x21, 0x30, 0x41, 0x43, 0x26, 0x03, 0x01, 0x10 }; // 0x03
+        constexpr std::array<uint8_t, 5> _diamond   = { 0x20, 0x43, 0x26, 0x03, 0x20 }; // 0x04
+        constexpr std::array<uint8_t, 20> _club     = { 0x20, 0x31, 0x32, 0x23, 0x12, 0x11, 0x20, LIFT, 0x12, 0x03, 0x04, 0x15, 0x24, 0x16, 0x36, 0x24, 0x35, 0x44, 0x43, 0x32 }; // 0x05
+        constexpr std::array<uint8_t, 14> _spade    = { 0x20, 0x32, 0x43, 0x44, 0x35, 0x24, 0x36, 0x16, 0x24, 0x15, 0x04, 0x03, 0x12, 0x20 }; // 0x06
+        constexpr std::array<uint8_t, 5> _bullet    = { 0x12, 0x23, 0x14, 0x03, 0x12 }; // 0x07
+        // 0x08 backspace - using space for now
+        constexpr std::array<uint8_t, 9> _circle    = { 0x11, 0x02, 0x03, 0x14, 0x24, 0x33, 0x32, 0x21, 0x11 }; // 0x09 TAB - using circle
+        // 0x0A line feed - handled in code
+        // 0x0B VT - using space
+        // 0x0C FF - using space
+        // 0x0D CR - handled in code (often ignored if LF present)
+        // 0x0E SO - using space
+        // 0x0F SI - using space
+        constexpr std::array<uint8_t, 4> _tri_R     = { 0x00, 0x06, 0x33, 0x00 }; // 0x10
+        constexpr std::array<uint8_t, 4> _tri_L     = { 0x03, 0x30, 0x36, 0x03 }; // 0x11
+        constexpr std::array<uint8_t, 14> _arrow_UD = { 0x20, 0x02, LIFT, 0x20, 0x42, LIFT, 0x26, 0x04, LIFT, 0x26, 0x44, LIFT, 0x20, 0x26 }; // 0x12
+        // 0x13 XON - using space
+        // 0x14 DC4 - using space
+        // 0x15 NAK - using space
+        // 0x16 SYN - using space
+        // 0x17 ETB - using space
+        constexpr std::array<uint8_t, 8> _arrow_U   = { 0x20, 0x02, LIFT, 0x20, 0x42, LIFT, 0x20, 0x26 }; // 0x18 CAN
+        constexpr std::array<uint8_t, 8> _arrow_D   = { 0x26, 0x04, LIFT, 0x26, 0x44, LIFT, 0x20, 0x26 }; // 0x19 EM
+        constexpr std::array<uint8_t, 8> _arrow_R   = { 0x43, 0x21, LIFT, 0x43, 0x25, LIFT, 0x03, 0x43 }; // 0x1A SUB
+        constexpr std::array<uint8_t, 8> _arrow_L   = { 0x03, 0x21, LIFT, 0x03, 0x25, LIFT, 0x03, 0x43 }; // 0x1B ESC
+        // 0x1C FS - using space
+        constexpr std::array<uint8_t, 14> _arrow_LR = { 0x03, 0x11, LIFT, 0x03, 0x15, LIFT, 0x43, 0x31, LIFT, 0x43, 0x35, LIFT, 0x03, 0x43 }; // 0x1D GS
+        constexpr std::array<uint8_t, 4> _tri_U     = { 0x20, 0x46, 0x06, 0x20 }; // 0x1E RS
+        constexpr std::array<uint8_t, 4> _tri_D     = { 0x26, 0x00, 0x40, 0x26 }; // 0x1F US
+        // ASCII character definitions (0x20 - 0x7E)
+        constexpr std::array<uint8_t, 5> _expt      = { 0x00, 0x04, LIFT, 0x06, LIFT }; // 0x21 !
+        constexpr std::array<uint8_t, 5> _quote2    = { 0x00, 0x02, LIFT, 0x10, 0x12 }; // 0x22 "
+        constexpr std::array<uint8_t, 11> _hash     = { 0x10, 0x16, LIFT, 0x30, 0x36, LIFT, 0x02, 0x42, LIFT, 0x04, 0x44 }; // 0x23 #
+        constexpr std::array<uint8_t, 11> _dollar   = { 0x41, 0x11, 0x02, 0x13, 0x33, 0x44, 0x35, 0x05, LIFT, 0x20, 0x26 }; // 0x24 $
+        constexpr std::array<uint8_t, 7> _pct       = { 0x21, 0x05, LIFT, 0x01, LIFT, 0x25, LIFT }; // 0x25 %
+        constexpr std::array<uint8_t, 13> _and      = { 0x31, 0x20, 0x10, 0x01, 0x02, 0x46, LIFT, 0x13, 0x04, 0x05, 0x16, 0x26, 0x44 }; // 0x26 &
+        constexpr std::array<uint8_t, 2> _quote1    = { 0x00, 0x02 }; // 0x27 '
+        constexpr std::array<uint8_t, 4> _lparen    = { 0x10, 0x01, 0x05, 0x16 }; // 0x28 (
+        constexpr std::array<uint8_t, 4> _rparen    = { 0x00, 0x11, 0x15, 0x06 }; // 0x29 )
+        constexpr std::array<uint8_t, 11> _star     = { 0x01, 0x45, LIFT, 0x21, 0x25, LIFT, 0x41, 0x05, LIFT, 0x03, 0x43 }; // 0x2A *
+        constexpr std::array<uint8_t, 5> _plus      = { 0x21, 0x25, LIFT, 0x03, 0x43 }; // 0x2B +
+        constexpr std::array<uint8_t, 4> _comma     = { 0x16, LIFT, 0x16, 0x07 }; // 0x2C ,
+        constexpr std::array<uint8_t, 2> _dash      = { 0x03, 0x43 }; // 0x2D -
+        constexpr std::array<uint8_t, 2> _dot       = { 0x06, LIFT }; // 0x2E .
+        constexpr std::array<uint8_t, 2> _slash     = { 0x40, 0x06 }; // 0x2F /
+        constexpr std::array<uint8_t, 9> _0         = { 0x10, 0x01, 0x05, 0x16, 0x36, 0x45, 0x41, 0x30, 0x10 }; // 0x30 0
+        constexpr std::array<uint8_t, 6> _1         = { 0x01, 0x10, 0x16, LIFT, 0x06, 0x26 }; // 0x31 1
+        constexpr std::array<uint8_t, 7> _2         = { 0x01, 0x10, 0x30, 0x41, 0x42, 0x06, 0x46 }; // 0x32 2
+        constexpr std::array<uint8_t, 14> _3        = { 0x01, 0x10, 0x30, 0x41, 0x42, 0x33, 0x23, LIFT, 0x33, 0x44, 0x45, 0x36, 0x16, 0x05 }; // 0x33 3
+        constexpr std::array<uint8_t, 5> _4         = { 0x36, 0x30, 0x03, 0x04, 0x44 }; // 0x34 4
+        constexpr std::array<uint8_t, 9> _5         = { 0x40, 0x00, 0x03, 0x33, 0x44, 0x45, 0x36, 0x16, 0x05 }; // 0x35 5
+        constexpr std::array<uint8_t, 11> _6        = { 0x30, 0x20, 0x02, 0x05, 0x16, 0x36, 0x45, 0x44, 0x33, 0x13, 0x04 }; // 0x36 6
+        constexpr std::array<uint8_t, 3> _7         = { 0x00, 0x40, 0x16 }; // 0x37 7
+        constexpr std::array<uint8_t, 16> _8        = { 0x13, 0x02, 0x01, 0x10, 0x30, 0x41, 0x42, 0x33, 0x44, 0x45, 0x36, 0x16, 0x05, 0x04, 0x13, 0x33 }; // 0x38 8
+        constexpr std::array<uint8_t, 11> _9        = { 0x42, 0x33, 0x13, 0x02, 0x01, 0x10, 0x30, 0x41, 0x44, 0x26, 0x16 }; // 0x39 9
+        constexpr std::array<uint8_t, 4> _colon     = { 0x03, LIFT, 0x06, LIFT }; // 0x3A :
+        constexpr std::array<uint8_t, 6> _semi      = { 0x13, LIFT, 0x16, LIFT, 0x16, 0x07 }; // 0x3B ;
+        constexpr std::array<uint8_t, 3> _less      = { 0x21, 0x03, 0x25 }; // 0x3C <
+        constexpr std::array<uint8_t, 5> _equal     = { 0x02, 0x42, LIFT, 0x04, 0x44 }; // 0x3D =
+        constexpr std::array<uint8_t, 3> _great     = { 0x01, 0x23, 0x05 }; // 0x3E >
+        constexpr std::array<uint8_t, 9> _question  = { 0x01, 0x10, 0x30, 0x41, 0x23, 0x24, LIFT, 0x26, LIFT }; // 0x3F ?
+        constexpr std::array<uint8_t, 13> _at       = { 0x33, 0x22, 0x13, 0x14, 0x25, 0x35, 0x32, 0x21, 0x11, 0x02, 0x05, 0x16, 0x36 }; // 0x40 @
+        constexpr std::array<uint8_t, 6> _A         = { 0x06, 0x20, 0x46, LIFT, 0x13, 0x33 }; // 0x41 A
+        constexpr std::array<uint8_t, 11> _B        = { 0x23, 0x32, 0x31, 0x20, 0x00, 0x06, 0x36, 0x45, 0x44, 0x33, 0x03 }; // 0x42 B
+        constexpr std::array<uint8_t, 8> _C         = { 0x41, 0x30, 0x10, 0x01, 0x05, 0x16, 0x36, 0x45 }; // 0x43 C
+        constexpr std::array<uint8_t, 7> _D         = { 0x00, 0x06, 0x26, 0x44, 0x42, 0x20, 0x00 }; // 0x44 D
+        constexpr std::array<uint8_t, 7> _E         = { 0x40, 0x00, 0x06, 0x46, LIFT, 0x03, 0x33 }; // 0x45 E
+        constexpr std::array<uint8_t, 6> _F         = { 0x40, 0x00, 0x06, LIFT, 0x03, 0x33 }; // 0x46 F
+        constexpr std::array<uint8_t, 10> _G        = { 0x41, 0x30, 0x10, 0x01, 0x05, 0x16, 0x36, 0x45, 0x43, 0x23 }; // 0x47 G
+        constexpr std::array<uint8_t, 8> _H         = { 0x00, 0x06, LIFT, 0x40, 0x46, LIFT, 0x03, 0x43 }; // 0x48 H
+        constexpr std::array<uint8_t, 8> _I         = { 0x10, 0x30, LIFT, 0x16, 0x36, LIFT, 0x20, 0x26 }; // 0x49 I
+        constexpr std::array<uint8_t, 6> _J         = { 0x30, 0x40, 0x45, 0x36, 0x16, 0x05 }; // 0x4A J
+        constexpr std::array<uint8_t, 7> _K         = { 0x00, 0x06, LIFT, 0x30, 0x03, 0x13, 0x46 }; // 0x4B K
+        constexpr std::array<uint8_t, 3> _L         = { 0x00, 0x06, 0x46 }; // 0x4C L
+        constexpr std::array<uint8_t, 5> _M         = { 0x06, 0x00, 0x24, 0x40, 0x46 }; // 0x4D M
+        constexpr std::array<uint8_t, 4> _N         = { 0x06, 0x00, 0x46, 0x40 }; // 0x4E N
+        constexpr std::array<uint8_t, 9> _O         = { 0x10, 0x01, 0x05, 0x16, 0x36, 0x45, 0x41, 0x30, 0x10 }; // 0x4F O
+        constexpr std::array<uint8_t, 7> _P         = { 0x06, 0x00, 0x30, 0x41, 0x42, 0x33, 0x03 }; // 0x50 P
+        constexpr std::array<uint8_t, 12> _Q        = { 0x10, 0x01, 0x05, 0x16, 0x36, 0x45, 0x41, 0x30, 0x10, LIFT, 0x24, 0x46 }; // 0x51 Q
+        constexpr std::array<uint8_t, 10> _R        = { 0x06, 0x00, 0x30, 0x41, 0x42, 0x33, 0x03, LIFT, 0x13, 0x46 }; // 0x52 R
+        constexpr std::array<uint8_t, 12> _S        = { 0x40, 0x30, 0x10, 0x01, 0x02, 0x13, 0x33, 0x44, 0x45, 0x36, 0x16, 0x06 }; // 0x53 S
+        constexpr std::array<uint8_t, 5> _T         = { 0x00, 0x40, LIFT, 0x20, 0x26 }; // 0x54 T
+        constexpr std::array<uint8_t, 6> _U         = { 0x00, 0x05, 0x16, 0x36, 0x45, 0x40 }; // 0x55 U
+        constexpr std::array<uint8_t, 3> _V         = { 0x00, 0x26, 0x40 }; // 0x56 V
+        constexpr std::array<uint8_t, 5> _W         = { 0x00, 0x06, 0x23, 0x46, 0x40 }; // 0x57 W
+        constexpr std::array<uint8_t, 5> _X         = { 0x00, 0x46, LIFT, 0x40, 0x06 }; // 0x58 X
+        constexpr std::array<uint8_t, 6> _Y         = { 0x00, 0x23, 0x26, LIFT, 0x40, 0x23 }; // 0x59 Y
+        constexpr std::array<uint8_t, 4> _Z         = { 0x00, 0x40, 0x06, 0x46 }; // 0x5A Z
+        constexpr std::array<uint8_t, 4> _lbrack    = { 0x20, 0x00, 0x06, 0x26 }; // 0x5B [
+        constexpr std::array<uint8_t, 2> _bslash    = { 0x00, 0x46 }; // 0x5C ''
+        constexpr std::array<uint8_t, 4> _rbrack    = { 0x00, 0x20, 0x26, 0x06 }; // 0x5D ]
+        constexpr std::array<uint8_t, 3> _carat     = { 0x02, 0x11, 0x22 }; // 0x5E ^
+        constexpr std::array<uint8_t, 2> _under     = { 0x06, 0x46 }; // 0x5F _
+        constexpr std::array<uint8_t, 2> _acute     = { 0x00, 0x22 }; // 0x60 `
+        constexpr std::array<uint8_t, 8> _a         = { 0x35, 0x26, 0x16, 0x05, 0x04, 0x13, 0x33, 0x36 }; // 0x61 a
+        constexpr std::array<uint8_t, 7> _b         = { 0x00, 0x06, 0x26, 0x35, 0x34, 0x23, 0x03 }; // 0x62 b
+        constexpr std::array<uint8_t, 6> _c         = { 0x33, 0x13, 0x04, 0x05, 0x16, 0x36 }; // 0x63 c
+        constexpr std::array<uint8_t, 7> _d         = { 0x33, 0x13, 0x04, 0x05, 0x16, 0x36, 0x30 }; // 0x64 d
+        constexpr std::array<uint8_t, 8> _e         = { 0x05, 0x34, 0x23, 0x13, 0x04, 0x05, 0x16, 0x36 }; // 0x65 e
+        constexpr std::array<uint8_t, 7> _f         = { 0x30, 0x20, 0x11, 0x16, LIFT, 0x03, 0x23 }; // 0x66 f
+        constexpr std::array<uint8_t, 9> _g         = { 0x36, 0x16, 0x05, 0x04, 0x13, 0x33, 0x37, 0x28, 0x08 }; // 0x67 g
+        constexpr std::array<uint8_t, 7> _h         = { 0x00, 0x06, LIFT, 0x03, 0x23, 0x34, 0x36 }; // 0x68 h
+        constexpr std::array<uint8_t, 4> _i         = { 0x01, LIFT, 0x03, 0x06 }; // 0x69 i
+        constexpr std::array<uint8_t, 6> _j         = { 0x21, LIFT, 0x23, 0x27, 0x18, 0x08 }; // 0x6A j
+        constexpr std::array<uint8_t, 7> _k         = { 0x00, 0x06, LIFT, 0x22, 0x04, 0x14, 0x36 }; // 0x6B k
+        constexpr std::array<uint8_t, 2> _l         = { 0x00, 0x06 }; // 0x6C l
+        constexpr std::array<uint8_t, 10> _m        = { 0x06, 0x03, 0x13, 0x24, LIFT, 0x25, 0x23, 0x33, 0x44, 0x46 }; // 0x6D m
+        constexpr std::array<uint8_t, 8> _n         = { 0x03, 0x06, LIFT, 0x04, 0x13, 0x23, 0x34, 0x36 }; // 0x6E n
+        constexpr std::array<uint8_t, 9> _o         = { 0x13, 0x04, 0x05, 0x16, 0x26, 0x35, 0x34, 0x23, 0x13 }; // 0x6F o
+        constexpr std::array<uint8_t, 8> _p         = { 0x08, 0x03, 0x23, 0x34, 0x35, 0x26, 0x16, 0x05 }; // 0x70 p
+        constexpr std::array<uint8_t, 12> _q        = { 0x35, 0x26, 0x16, 0x05, 0x04, 0x13, 0x23, 0x34, LIFT, 0x33, 0x38, 0x47 }; // 0x71 q
+        constexpr std::array<uint8_t, 7> _r         = { 0x03, 0x06, LIFT, 0x04, 0x13, 0x23, 0x34 }; // 0x72 r
+        constexpr std::array<uint8_t, 6> _s         = { 0x33, 0x13, 0x04, 0x35, 0x26, 0x06 }; // 0x73 s
+        constexpr std::array<uint8_t, 6> _t         = { 0x11, 0x15, 0x26, LIFT, 0x03, 0x23 }; // 0x74 t
+        constexpr std::array<uint8_t, 8> _u         = { 0x03, 0x05, 0x16, 0x26, 0x35, LIFT, 0x33, 0x36 }; // 0x75 u
+        constexpr std::array<uint8_t, 4> _v         = { 0x03, 0x16, 0x26, 0x33 }; // 0x76 v
+        constexpr std::array<uint8_t, 10> _w        = { 0x03, 0x05, 0x16, 0x25, 0x24, LIFT, 0x25, 0x36, 0x45, 0x43 }; // 0x77 w
+        constexpr std::array<uint8_t, 5> _x         = { 0x03, 0x36, LIFT, 0x33, 0x06 }; // 0x78 x
+        constexpr std::array<uint8_t, 11> _y        = { 0x03, 0x05, 0x16, 0x26, 0x35, LIFT, 0x33, 0x37, 0x28, 0x18, 0x07 }; // 0x79 y
+        constexpr std::array<uint8_t, 4> _z         = { 0x03, 0x33, 0x06, 0x36 }; // 0x7A z
+        constexpr std::array<uint8_t, 7> _lbrace    = { 0x20, 0x11, 0x13, 0x04, 0x15, 0x17, 0x28 }; // 0x7B {
+        constexpr std::array<uint8_t, 2> _bar       = { 0x00, 0x08 }; // 0x7C |
+        constexpr std::array<uint8_t, 7> _rbrace    = { 0x00, 0x11, 0x13, 0x24, 0x15, 0x17, 0x08 }; // 0x7D }
+        constexpr std::array<uint8_t, 5> _tilde     = { 0x10, 0x21, 0x12, 0x01, 0x10 }; // 0x7E ~
+        constexpr std::array<uint8_t, 1> _del       = { LIFT }; // 0x7F DEL
+    } // detail
+
+    // --- Public Font Character Lookup Table ---
+    // Use std::array for the main lookup table.
+    // Initialize FontChar using aggregate initialization; std::span can be
+    // implicitly constructed from std::array.
+    constexpr std::array<FontChar, FONT_CHAR_COUNT> font_chars = {{
+        {detail::_space},    {detail::_happy},    {detail::_sad},      {detail::_heart},      // 00-03
+        {detail::_diamond},  {detail::_club},     {detail::_spade},    {detail::_bullet},     // 04-07
+        {detail::_space},    {detail::_circle},   {detail::_space},    {detail::_space},      // 08-0B (BS, TAB)
+        {detail::_space},    {detail::_space},    {detail::_space},    {detail::_space},      // 0C-0F
+        {detail::_tri_R},    {detail::_tri_L},    {detail::_arrow_UD}, {detail::_space},      // 10-13
+        {detail::_space},    {detail::_space},    {detail::_space},    {detail::_space},      // 14-17
+        {detail::_arrow_U},  {detail::_arrow_D},  {detail::_arrow_R},  {detail::_arrow_L},    // 18-1B (CAN,EM,SUB,ESC)
+        {detail::_space},    {detail::_arrow_LR}, {detail::_tri_U},    {detail::_tri_D},      // 1C-1F
+        // ASCII (0x20 - 0x7F)
+        {detail::_space},  {detail::_expt},   {detail::_quote2}, {detail::_hash},      // 20-23
+        {detail::_dollar}, {detail::_pct},    {detail::_and},    {detail::_quote1},     // 24-27
+        {detail::_lparen}, {detail::_rparen}, {detail::_star},   {detail::_plus},       // 28-2B
+        {detail::_comma},  {detail::_dash},   {detail::_dot},    {detail::_slash},      // 2C-2F
+        {detail::_0},      {detail::_1},      {detail::_2},      {detail::_3},          // 30-33
+        {detail::_4},      {detail::_5},      {detail::_6},      {detail::_7},          // 34-37
+        {detail::_8},      {detail::_9},      {detail::_colon},  {detail::_semi},       // 38-3B
+        {detail::_less},   {detail::_equal},  {detail::_great},  {detail::_question},   // 3C-3F
+        {detail::_at},     {detail::_A},      {detail::_B},      {detail::_C},          // 40-43
+        {detail::_D},      {detail::_E},      {detail::_F},      {detail::_G},          // 44-47
+        {detail::_H},      {detail::_I},      {detail::_J},      {detail::_K},          // 48-4B
+        {detail::_L},      {detail::_M},      {detail::_N},      {detail::_O},          // 4C-4F
+        {detail::_P},      {detail::_Q},      {detail::_R},      {detail::_S},          // 50-53
+        {detail::_T},      {detail::_U},      {detail::_V},      {detail::_W},          // 54-57
+        {detail::_X},      {detail::_Y},      {detail::_Z},      {detail::_lbrack},     // 58-5B
+        {detail::_bslash}, {detail::_rbrack}, {detail::_carat},  {detail::_under},      // 5C-5F
+        {detail::_acute},  {detail::_a},      {detail::_b},      {detail::_c},          // 60-63
+        {detail::_d},      {detail::_e},      {detail::_f},      {detail::_g},          // 64-67
+        {detail::_h},      {detail::_i},      {detail::_j},      {detail::_k},          // 68-6B
+        {detail::_l},      {detail::_m},      {detail::_n},      {detail::_o},          // 6C-6F
+        {detail::_p},      {detail::_q},      {detail::_r},      {detail::_s},          // 70-73
+        {detail::_t},      {detail::_u},      {detail::_v},      {detail::_w},          // 74-77
+        {detail::_x},      {detail::_y},      {detail::_z},      {detail::_lbrace},     // 78-7B
+        {detail::_bar},    {detail::_rbrace}, {detail::_tilde},  {detail::_del},        // 7C-7F
+    }};
+
+    constexpr const FontChar& getCharDef(uint8_t code) {
+        if (code >= FONT_CHAR_MIN && code <= FONT_CHAR_MAX) {
+            return font_chars[code - FONT_CHAR_MIN];
+        } else {
+            // Return definition for space 
+            return font_chars[0x20 - FONT_CHAR_MIN];
+        }
+    }
+} // VectorFont
+
 /**
  * @brief Structure holding non-owning views (spans) to paletted sprite data.
  * Designed to work with statically allocated sprite data. Requires C++20.
@@ -509,6 +706,84 @@ public:
             }
         }
     }
+
+    void drawText(const char *text, int tx, int ty, float scale, uint32_t color)
+    {
+        int thickness = (int)scale;
+        if (scale <= 0.0f) return; // Scale must be positive
+        if (JADRAW_ALPHA(color) == 0) return; // Fully transparent, nothing to draw
+
+        int current_x = tx;
+        int current_y = ty;
+
+        // Calculate the size of one grid unit in pixels based on scale
+        float unit_size_px = scale; // Simpler: scale multiplies the base grid unit size
+
+        // Calculate advance width and line height in pixels
+        int advance_x = (int)roundf(VectorFont::CHAR_WIDTH * unit_size_px);
+        int advance_y = (int)roundf(VectorFont::CHAR_HEIGHT * unit_size_px);
+
+        for (size_t i = 0; text[i] != '\0'; ++i) {
+            unsigned char c = (unsigned char)text[i];
+
+            // Handle newline character
+            if (c == '\n') {
+                current_x = tx; // Reset X to the starting X
+                current_y += advance_y; // Move Y down by one line height
+                continue;
+            }
+            // Handle carriage return (often ignored if LF follows, but good practice)
+            if (c == '\r') {
+                current_x = tx; // Reset X to the starting X
+                continue;
+            }
+            // Get the character definition
+            const VectorFont::FontChar& fontchar = VectorFont::getCharDef(c);
+
+            bool last_point_valid = false;
+            int last_sx = 0, last_sy = 0;
+
+            // Iterate through the points defining the character
+            for (size_t pt_idx = 0; pt_idx < fontchar.size(); ++pt_idx) {
+                uint8_t p = fontchar.points[pt_idx];
+
+                if (p == VectorFont::LIFT) {
+                    last_point_valid = false; // Lift the pen, break the line
+                } else {
+                    // Decode grid coordinates (High nibble X, Low nibble Y)
+                    int fx = (p >> 4) & 0x0F;
+                    int fy = p & 0x0F;
+
+                    // Scale coordinates to screen pixels relative to the character origin (current_x, current_y)
+                    int sx = current_x + (int)roundf((float)fx * unit_size_px);
+                    int sy = current_y + (int)roundf((float)fy * unit_size_px);
+
+                    if (last_point_valid) {
+                        // Draw a line from the last point to the current point
+                        drawLineAA(last_sx, last_sy, sx, sy, color);
+                    } else {
+                        // This is the first point after a LIFT or the start of the character data.
+                        // Check if it's a standalone point (i.e., the next item is LIFT or end of data)
+                        if (pt_idx + 1 >= fontchar.size() || fontchar.points[pt_idx + 1] == VectorFont::LIFT) {
+                            drawPixel(sx, sy, color);
+                        }
+                        // If it's the start of a line segment (next point is not LIFT/end),
+                        // we don't draw the point explicitly here. The olivec_line call
+                        // in the *next* iteration will draw the line *starting* from this point.
+                    }
+
+                    // Update the last point for the next potential line segment
+                    last_sx = sx;
+                    last_sy = sy;
+                    last_point_valid = true;
+                }
+            }
+
+            // Advance cursor position for the next character
+            current_x += advance_x;
+        }
+    }
+
 }; // JaDraw<W, H>
 
 
