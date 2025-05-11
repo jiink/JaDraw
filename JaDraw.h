@@ -9,6 +9,7 @@
 #include <cassert>
 #include <limits>
 #include <span>
+#include <vector>
 
 enum class DrawMode {
     OPAQUE,   // Blend source RGB onto destination using `intensity` as alpha factor. Destination alpha is also blended.
@@ -24,6 +25,11 @@ enum class DrawMode {
                              (static_cast<uint32_t>(g) << 16) | \
                              (static_cast<uint32_t>(b) << 8)  | \
                              (static_cast<uint32_t>(a)) )
+
+struct Vec2{
+    float x;
+    float y;
+};
 
 namespace Colors {
     constexpr uint32_t Black       = 0x000000FF;
@@ -787,7 +793,7 @@ public:
 
         // Integer coordinates of the top-left *pixel cell* that sourceRectCornerX,Y falls into
         // Note: floorf returns a float. If frameBufferAddPixV needs int coords,
-        // you might cast later or it handles it. The Vector2 suggests it takes floats.
+        // you might cast later or it handles it. The Vec2 suggests it takes floats.
         float basePixelX = floorf(sourceRectCornerX);
         float basePixelY = floorf(sourceRectCornerY);
 
@@ -898,6 +904,122 @@ public:
         }
     }
 
+    /**
+     * @brief Draws a filled polygon.
+     * 
+     * @param points The vertices of the polygon
+     * @param color The fill color
+     * @param aa Whether to do anti-aliasing
+     */
+    void drawPolygon(const std::vector<Vec2>& points, uint32_t color, bool aa, DrawMode mode = DrawMode::BLEND)
+    {
+        int num_vertices = points.size();
+        if (num_vertices < 3) {
+            return; // Not a polygon
+        }
+
+        // 1. Find Y-bounding box of the polygon
+        int min_y = points[0].y;
+        int max_y = points[0].y;
+
+        for (int i = 1; i < num_vertices; ++i) {
+            if (points[i].y < min_y) {
+                min_y = points[i].y;
+            }
+            if (points[i].y > max_y) {
+                max_y = points[i].y;
+            }
+        }
+
+        // For storing X-intersections on the current scanline
+        // On a microcontroller, if num_vertices is small and bounded,
+        // a fixed-size array could be more efficient than std::vector
+        // to avoid dynamic allocations.
+        std::vector<float> intersections;
+
+        // 2. Iterate through scanlines from min_y to max_y-1
+        for (int y_scan = min_y; y_scan < max_y; ++y_scan) {
+            intersections.clear(); // Reset for current scanline
+
+            // Find all intersections with polygon edges
+            for (int i = 0; i < num_vertices; ++i) {
+                const Vec2& p1 = points[i];
+                const Vec2& p2 = points[(i + 1) % num_vertices]; // Next point, wraps around
+
+                // Check if the edge (p1, p2) crosses the scanline y_scan
+                // An edge crosses if one endpoint is on/below the scanline AND
+                // the other endpoint is strictly above the scanline.
+                // This handles horizontal lines correctly (they are not counted)
+                // and also vertices lying on the scanline.
+                if ((p1.y <= y_scan && p2.y > y_scan) || (p2.y <= y_scan && p1.y > y_scan)) {
+                    // Edge crosses scanline, calculate X-intersection
+                    // Avoid division by zero (p2.y - p1.y == 0), though the condition above already prevents this
+                    // because if p1.y == p2.y, then (p1.y <= y_scan && p1.y > y_scan) is false.
+                    float intersect_x;
+                    if (p1.y == p2.y) { // Should not happen due to check above, but defensive
+                        intersect_x = static_cast<float>(p1.x); // or p2.x
+                    } else {
+                        // (y_scan - p1.y) is float because y_scan is int, p1.y is int
+                        // (p2.y - p1.y) is float for division
+                        // (p2.x - p1.x) is float for multiplication
+                        intersect_x = static_cast<float>(p1.x) +
+                                    static_cast<float>(p2.x - p1.x) *
+                                    (static_cast<float>(y_scan - p1.y) / static_cast<float>(p2.y - p1.y));
+                    }
+                    intersections.push_back(intersect_x);
+                }
+            }
+
+            // Sort intersections by X-coordinate
+            std::sort(intersections.begin(), intersections.end());
+
+            // Fill spans between pairs of intersections (even-odd rule)
+            for (size_t j = 0; j < intersections.size(); j += 2) {
+                if (j + 1 < intersections.size()) {
+                    // Round to nearest integer pixel.
+                    // Pixel (x,y) is often considered to cover the square [x, x+1) x [y, y+1)
+                    // We want to fill from the center of the first pixel to the center of the last.
+                    // If x_start_f = 0.1 and x_end_f = 3.9
+                    // round(x_start_f) = 0, round(x_end_f) = 4
+                    // We draw pixels 0, 1, 2, 3. So loop x from x_start to x_end-1.
+                    int x_start = static_cast<int>(std::round(intersections[j]));
+                    int x_end   = static_cast<int>(std::round(intersections[j+1]));
+
+                    if (x_start < x_end) { // Ensure there's a span to draw
+                        // Use drawLine for horizontal segment if available and efficient
+                        // drawLine(x_start, y_scan, x_end - 1, y_scan, color);
+                        // Otherwise, loop with drawPixel:
+                        for (int x = x_start; x < x_end; ++x) {
+                            drawPixel(x, y_scan, color, mode);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Draw anti-aliased (or aliased) outline on top of the fill
+        if (aa) {
+            for (int i = 0; i < num_vertices; ++i) {
+                const Vec2& p1 = points[i];
+                const Vec2& p2 = points[(i + 1) % num_vertices];
+                drawLineAA(static_cast<float>(p1.x), static_cast<float>(p1.y),
+                        static_cast<float>(p2.x), static_cast<float>(p2.y),
+                        color, mode); // Using fill color for AA border
+            }
+        } else {
+            // Optional: Draw a non-AA border if desired even when aa is false.
+            // Some might prefer this, others might find the fill sufficient.
+            // For this implementation, if not AA, the fill itself defines the edges.
+            // If an aliased border is always needed:
+            /*
+            for (int i = 0; i < num_vertices; ++i) {
+                const Vec2& p1 = points[i];
+                const Vec2& p2 = points[(i + 1) % num_vertices];
+                drawLine(p1.x, p1.y, p2.x, p2.y, color);
+            }
+            */
+        }
+    }
 }; // JaDraw<W, H>
 
 

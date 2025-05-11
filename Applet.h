@@ -1,6 +1,7 @@
 #pragma once
 #include "system.h"
 #include "JaDraw.h"
+#include "sun_icon_img.h"
 
 struct InputData {
     int rotation = 0; 
@@ -49,13 +50,17 @@ void MyApplet::loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputData& in
     canvas.clear(0x001030FF);
     canvas.drawLineAA(0, 0, x, y, Colors::Red);
     canvas.drawLineAA(WIDTH - 1, 0, x, y, Colors::Orange);
+    canvas.drawSprite(x, y, Sprites::sun_icon);
     static char out[20];
-    snprintf(out, sizeof(out), "hello? %c", (unsigned char)(t*10.0f));
+    snprintf(out, sizeof(out), "hello?%c", (unsigned char)(t*10.0f));
     canvas.drawText(out,
         8 + 16 * sin(t * 1.0f),
         10 + 10 * cos(t * 0.8f),
         2.0f + 1.0f * cos(t * 0.5),
         Colors::Magenta);
+    std::vector<Vec2> triangle = {{12, 4}, {19, 11}, {26, 5},
+                            {25, 18}, {11, 16}};
+    canvas.drawPolygon(triangle, Colors::Grey, false, DrawMode::ADDITIVE);
 }
 
 const char* MyApplet::getName() const {
