@@ -1,26 +1,7 @@
 #pragma once
-#include "system.h"
+#include "IApplet.h"
 #include "JaDraw.h"
-#include "sun_icon_img.h"
 #include "vmath_all.hpp"
-
-struct InputData {
-    int rotation = 0; 
-    bool pressed = false;
-};
-
-class IApplet {
-public:
-    virtual ~IApplet() = default;
-    /// @brief Called once the applet is selected, before running any loop.
-    virtual void setup() = 0;
-    /// @brief Called every frame.
-    /// @param canvas The framebuffer to show up on the screen.
-    /// @param dt Time since last call, in seconds.
-    /// @param inputs The controls that may be consumed (e.g. knob turns, button presses).
-    virtual void loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputData& inputs) = 0;
-    virtual const char* getName() const = 0;
-};
 
 class MyApplet : public IApplet {
 public:
@@ -127,7 +108,7 @@ void MyApplet::loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputData& in
     //     Colors::Magenta);
     // std::vector<Vec2> triangle = {{12, 4}, {19, 11}, {26, 5},
     //                         {25, 18}, {11, 16}};
-    // canvas.drawPolygon(triangle, Colors::Grey, false, DrawMode::ADDITIVE);
+    // canvas.drawPolygon(triangle, Colors::Grey, false, BlendMode::ADDITIVE);
     const float inverseHeight = 1.0f / static_cast<float>(HEIGHT);
     alternate = !alternate;
     for (int i = 0; i < WIDTH * HEIGHT; i++)

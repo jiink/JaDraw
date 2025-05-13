@@ -8,7 +8,9 @@
 #include <stdexcept>
 #include <span>
 #include "system.h"
-#include "Applet.h"
+#include "MyApplet.h"
+#include "ClockApplet.h"
+
 const int CANVAS_WIDTH = WIDTH;
 const int CANVAS_HEIGHT = HEIGHT;
 const int SCREEN_SCALE = 10;
@@ -63,7 +65,7 @@ int main(int argc, char* argv[]) {
     bool quit = false;
     SDL_Event e;
     float deltaTime = 0.016f;
-    MyApplet applet;
+    ClockApplet applet;
     applet.setup();
     while (!quit) {
         while (SDL_PollEvent(&e) != 0) {

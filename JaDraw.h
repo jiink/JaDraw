@@ -11,7 +11,7 @@
 #include <span>
 #include <vector>
 
-enum class DrawMode {
+enum class BlendMode {
     OPAQUE,   // Blend source RGB onto destination using `intensity` as alpha factor. Destination alpha is also blended.
     BLEND,    // Blend source RGB onto destination using `source_color`'s alpha (scaled by `intensity`) as alpha factor. Destination alpha is also blended.
     ADDITIVE  // Add source RGB (scaled by `intensity`) to destination RGB, clamp result. Destination alpha remains unchanged.
@@ -131,7 +131,7 @@ namespace VectorFont {
         constexpr std::array<uint8_t, 2> f_dot       = { 0x06, LIFT }; // 0x2E .
         constexpr std::array<uint8_t, 2> f_slash     = { 0x40, 0x06 }; // 0x2F /
         constexpr std::array<uint8_t, 9> f_0         = { 0x10, 0x01, 0x05, 0x16, 0x36, 0x45, 0x41, 0x30, 0x10 }; // 0x30 0
-        constexpr std::array<uint8_t, 6> f_1         = { 0x01, 0x10, 0x16, LIFT, 0x06, 0x26 }; // 0x31 1
+        constexpr std::array<uint8_t, 6> f_1         = { 0x03, 0x20, 0x26, LIFT, 0x06, 0x46 }; // 0x31 1
         constexpr std::array<uint8_t, 7> f_2         = { 0x01, 0x10, 0x30, 0x41, 0x42, 0x06, 0x46 }; // 0x32 2
         constexpr std::array<uint8_t, 14> f_3        = { 0x01, 0x10, 0x30, 0x41, 0x42, 0x33, 0x23, LIFT, 0x33, 0x44, 0x45, 0x36, 0x16, 0x05 }; // 0x33 3
         constexpr std::array<uint8_t, 5> f_4         = { 0x36, 0x30, 0x03, 0x04, 0x44 }; // 0x34 4
@@ -394,7 +394,7 @@ private:
     static inline int round_int(float x) { return static_cast<int>(std::round(x)); }
 
     // --- Core Plotting Function ---
-     inline void plotPixelUnsafeWithIntensityMode(int x, int y, uint32_t source_color, float intensity, DrawMode mode) {
+     inline void plotPixelUnsafeWithIntensityMode(int x, int y, uint32_t source_color, float intensity, BlendMode mode) {
         if (intensity <= 0.0f) return;
         if (intensity > 1.0f) intensity = 1.0f;
 
@@ -412,7 +412,7 @@ private:
         uint32_t dest_a = JADRAW_ALPHA(dest_pixel);
 
         switch (mode) {
-            case DrawMode::OPAQUE: {
+            case BlendMode::OPAQUE: {
                 uint32_t effective_a = static_cast<uint32_t>(255 * intensity);
                 if (effective_a == 0) return;
 
@@ -426,7 +426,7 @@ private:
                 dest_pixel = JADRAW_RGBA(blend_r, blend_g, blend_b, blend_a);
                 break;
             }
-            case DrawMode::BLEND: {
+            case BlendMode::BLEND: {
                 uint32_t src_a_effective = static_cast<uint32_t>(src_a * intensity);
                 if (src_a_effective == 0) return;
 
@@ -440,7 +440,7 @@ private:
                 dest_pixel = JADRAW_RGBA(blend_r, blend_g, blend_b, blend_a);
                 break;
             }
-            case DrawMode::ADDITIVE: {
+            case BlendMode::ADDITIVE: {
                 // Scale source color by intensity
                 unsigned int scaled_src_r = static_cast<unsigned int>(src_r * intensity);
                 unsigned int scaled_src_g = static_cast<unsigned int>(src_g * intensity);
@@ -482,7 +482,7 @@ public:
      * @param color Pixel color (RGBA).
      * @param mode Drawing mode (OPAQUE, BLEND, ADDITIVE).
      */
-    inline void drawPixel(int x, int y, uint32_t color, DrawMode mode = DrawMode::BLEND) {
+    inline void drawPixel(int x, int y, uint32_t color, BlendMode mode = BlendMode::BLEND) {
         if (x >= 0 && x < W && y >= 0 && y < H) {
             plotPixelUnsafeWithIntensityMode(x, y, color, 1.0f, mode);
         }
@@ -499,7 +499,7 @@ public:
      * @param color Line color (RGBA).
      * @param mode Drawing mode (OPAQUE, BLEND, ADDITIVE).
      */
-    void drawLine(int x1, int y1, int x2, int y2, int thickness, uint32_t color, DrawMode mode = DrawMode::BLEND)
+    void drawLine(int x1, int y1, int x2, int y2, int thickness, uint32_t color, BlendMode mode = BlendMode::BLEND)
     {
         if (thickness <= 0) return;
 
@@ -608,10 +608,10 @@ public:
      * @param color Line color (RGBA). Alpha influences blending intensity in BLEND mode.
      * @param mode Drawing mode (OPAQUE, BLEND, ADDITIVE).
      */
-    void drawLineAA(float x1, float y1, float x2, float y2, uint32_t color, DrawMode mode = DrawMode::BLEND)
+    void drawLineAA(float x1, float y1, float x2, float y2, uint32_t color, BlendMode mode = BlendMode::BLEND)
     {
          // Optimization: If source alpha is 0 and mode uses it, nothing will be drawn.
-         if (JADRAW_ALPHA(color) == 0 && (mode == DrawMode::BLEND /*|| mode == DrawMode::ADDITIVE*/)) {
+         if (JADRAW_ALPHA(color) == 0 && (mode == BlendMode::BLEND /*|| mode == DrawMode::ADDITIVE*/)) {
              // Note: Additive mode *could* still draw if intensity > 0, even if alpha is 0,
              // but current plotPixelUnsafeWithIntensityMode scales RGB by intensity for ADDITIVE.
              // If color RGB is non-zero, it *will* draw something. Let's keep it simple and only skip for BLEND.
@@ -716,7 +716,7 @@ public:
      * @param sprite The JaSprite object (viewing static or other data) to draw.
      * @param mode Drawing mode for non-transparent pixels.
      */
-    void drawSprite(int dest_x, int dest_y, const JaSprite& sprite, DrawMode mode = DrawMode::BLEND) {
+    void drawSprite(int dest_x, int dest_y, const JaSprite& sprite, BlendMode mode = BlendMode::BLEND) {
         // Basic check if sprite has valid dimensions and data spans
         if (sprite.width <= 0 || sprite.height <= 0 || sprite.pixels.empty() || sprite.palette.empty()) {
             return; // Nothing to draw
@@ -785,7 +785,7 @@ public:
     /**
      * @brief Draws an antialiased dot.
      */
-    void drawPoint(float x, float y, uint32_t color, DrawMode mode = DrawMode::BLEND)
+    void drawPoint(float x, float y, uint32_t color, BlendMode mode = BlendMode::BLEND)
     {
         // Top-left corner of the 1x1 "source" square centered at (x, y)
         float sourceRectCornerX = x - 0.5f;
@@ -827,7 +827,7 @@ public:
         }
     }
 
-    void drawText(const char *text, float tx, float ty, float scale, uint32_t color, DrawMode mode = DrawMode::BLEND)
+    void drawText(const char *text, float tx, float ty, float scale, uint32_t color, BlendMode mode = BlendMode::BLEND)
     {
         int thickness = (int)scale;
         if (scale <= 0.0f) return; // Scale must be positive
@@ -911,7 +911,7 @@ public:
      * @param color The fill color
      * @param aa Whether to do anti-aliasing
      */
-    void drawPolygon(const std::vector<Vec2>& points, uint32_t color, bool aa, DrawMode mode = DrawMode::BLEND)
+    void drawPolygon(const std::vector<Vec2>& points, uint32_t color, bool aa, BlendMode mode = BlendMode::BLEND)
     {
         int num_vertices = points.size();
         if (num_vertices < 3) {
