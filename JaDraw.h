@@ -140,7 +140,7 @@ namespace VectorFont {
         constexpr std::array<uint8_t, 3> f_7         = { 0x00, 0x40, 0x16 }; // 0x37 7
         constexpr std::array<uint8_t, 16> f_8        = { 0x13, 0x02, 0x01, 0x10, 0x30, 0x41, 0x42, 0x33, 0x44, 0x45, 0x36, 0x16, 0x05, 0x04, 0x13, 0x33 }; // 0x38 8
         constexpr std::array<uint8_t, 11> f_9        = { 0x42, 0x33, 0x13, 0x02, 0x01, 0x10, 0x30, 0x41, 0x44, 0x26, 0x16 }; // 0x39 9
-        constexpr std::array<uint8_t, 4> f_colon     = { 0x03, LIFT, 0x06, LIFT }; // 0x3A :
+        constexpr std::array<uint8_t, 4> f_colon     = { 0x02, LIFT, 0x04, LIFT }; // 0x3A :
         constexpr std::array<uint8_t, 6> f_semi      = { 0x13, LIFT, 0x16, LIFT, 0x16, 0x07 }; // 0x3B ;
         constexpr std::array<uint8_t, 3> f_less      = { 0x21, 0x03, 0x25 }; // 0x3C <
         constexpr std::array<uint8_t, 5> f_equal     = { 0x02, 0x42, LIFT, 0x04, 0x44 }; // 0x3D =
@@ -827,7 +827,7 @@ public:
         }
     }
 
-    void drawText(const char *text, float tx, float ty, float scale, uint32_t color, BlendMode mode = BlendMode::BLEND)
+    void drawText(const char *text, float tx, float ty, float scale, uint32_t color, bool aa = true, BlendMode mode = BlendMode::BLEND)
     {
         int thickness = (int)scale;
         if (scale <= 0.0f) return; // Scale must be positive
@@ -880,12 +880,24 @@ public:
 
                     if (last_point_valid) {
                         // Draw a line from the last point to the current point
-                        drawLineAA(last_sx, last_sy, sx, sy, color, mode);
+                        if (aa) {
+                            drawLineAA(last_sx, last_sy, sx, sy, color, mode);
+                        } else {
+                            drawLine(static_cast<int>(std::round(last_sx)), static_cast<int>(std::round(last_sy)),
+                                     static_cast<int>(std::round(sx)), static_cast<int>(std::round(sy)),
+                                     thickness, color, mode);
+                        }
                     } else {
                         // This is the first point after a LIFT or the start of the character data.
                         // Check if it's a standalone point (i.e., the next item is LIFT or end of data)
                         if (pt_idx + 1 >= fontchar.size() || fontchar.points[pt_idx + 1] == VectorFont::LIFT) {
-                            drawPoint(sx, sy, color, mode);
+                            if (aa) {
+                                drawPoint(sx, sy, color, mode);
+                            } else {
+                                drawPixel(static_cast<int>(std::round(sx)),
+                                    static_cast<int>(std::round(sy)),
+                                    color, mode);
+                            }
                         }
                         // If it's the start of a line segment (next point is not LIFT/end),
                         // we don't draw the point explicitly here. The olivec_line call
