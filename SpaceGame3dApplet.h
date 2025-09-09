@@ -1,210 +1,390 @@
-
-
 #pragma once
 #include "IApplet.h"
 #include "JaDraw.h"
 #include "vmath_all.hpp"
-#include <vector>
-#include <limits>
-#include <cmath>
-#include <algorithm>
-#include <cstdlib>
-#include <ctime>
+#include "math_3d.h"
+
+#define MAX_ASTEROIDS 20
+#define MAX_BULLETS 15
+
+#define PLAYER_WIDTH 0.12f  
+#define PLAYER_HEIGHT 0.1f  
+#define PLAYER_Y_POS -0.85f
+#define PLAYER_SPEED 2.5f
+#define PLAYER_INITIAL_HP 100
+
+#define BULLET_SPEED 3.0f
+#define BULLET_WIDTH 0.03f
+#define BULLET_HEIGHT 0.05f
+#define BULLET_DAMAGE 10.0f
+#define LASER_CHARGE_TIME_FOR_BULLET 0.2f
+#define LASER_MAX_CHARGE_TIME 2.0f
+#define LASER_WIDTH 0.04f
+#define LASER_DURATION 0.15f
+#define LASER_BASE_DAMAGE 50.0f
+
+#define ASTEROID_SPAWN_INTERVAL 1.5f
+#define ASTEROID_MIN_SPEED 0.2f
+#define ASTEROID_MAX_SPEED 0.6f
+#define ASTEROID_MIN_SIZE 0.08f
+#define ASTEROID_MAX_SIZE 0.2f
+
+//struct Vec2i { int x, y; };
+//struct Vec3f { float x, y, z; };
+//struct Mat4f { float m[4][4]; };
+
+struct Vector2D{
+    float x, y;
+};
+struct Player {
+    Vector2D pos;
+    float hp;
+    float laserChargeTime;
+};
+
+struct Bullet {
+    bool active;
+    Vector2D pos;
+    Vector2D vel;
+};
+
+struct Asteroid {
+    bool active;
+    Vector2D pos;
+    Vector2D vel;
+    float size;
+    float hp;
+};
+
+struct Laser {
+    bool active;
+    float x_pos; // Laser is a vertical beam
+    float power;
+    float duration;
+};
+
+struct GameState {
+    Player player;
+    Asteroid asteroids[MAX_ASTEROIDS];
+    Bullet bullets[MAX_BULLETS];
+    Laser laser;
+
+    float asteroidSpawnTimer;
+    bool fireBtnWasPressed;
+    bool gameOver;
+};
+
+struct GameInputData {
+    bool fireBtnPressed;
+    float stickX; // -1.0 (left) to 1.0 (right)
+};
+
+// --- A Simple Cube Model (centered at origin, 1x1x1) ---
+const Vec3f CUBE_VERTICES[] = {
+    {-0.5f, -0.5f, -0.5f}, { 0.5f, -0.5f, -0.5f},
+    { 0.5f,  0.5f, -0.5f}, {-0.5f,  0.5f, -0.5f},
+    {-0.5f, -0.5f,  0.5f}, { 0.5f, -0.5f,  0.5f},
+    { 0.5f,  0.5f,  0.5f}, {-0.5f,  0.5f,  0.5f}
+};
+
+// 12 triangles, 3 indices per triangle
+const int CUBE_INDICES[] = {
+    0, 2, 1, 0, 3, 2, // Back face
+    1, 6, 5, 1, 2, 6, // Right face
+    5, 7, 4, 5, 6, 7, // Front face
+    4, 3, 0, 4, 7, 3, // Left face
+    3, 6, 2, 3, 7, 6, // Top face
+    4, 1, 5, 4, 0, 1  // Bottom face
+};
+const int CUBE_NUM_INDICES = 36;
 
 
-class MyApplet : public IApplet {
+static GameInputData gameInputData;
+
+class SpaceGame3dApplet : public IApplet {
 public:
-    MyApplet();
-    ~MyApplet() override = default;
+    SpaceGame3dApplet();
+    ~SpaceGame3dApplet() override = default;
     void setup() override;
     void loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputData& inputs) override;
     const char* getName() const override;
-
 private:
-    unsigned long millis = 0;
 };
 
-// --- Implementation ---
-
-MyApplet::MyApplet() { }
-
-void MyApplet::setup() { }
-
-const float PI = 3.14159265358f;
-
-// A simple 3D vector/point structure
-struct Vec3 {
-    float x, y, z;
-};
-
-// A 2D vector for projected screen coordinates
-struct Vec2i {
-    int x, y;
-};
-
-// Represents a single triangle to be rendered
-struct RenderTriangle {
-    Vec2i p[3];      // 2D projected points
-    float avgZ;     // Average depth for sorting (Painter's algorithm)
-    float brightness; // Brightness level (0.0 to 1.0)
-};
-
-// --- Cube Model Definition (Unit cube centered at origin) ---
-
-const Vec3 CUBE_VERTICES[] = {
-    {0.010339f, -0.061077f, 0.321988f},
-{0.030634f, -0.118241f, -0.284320f},
-{-0.157669f, -0.409149f, 0.197574f},
-{0.104475f, -0.093989f, 0.253589f},
-{0.102440f, 0.281312f, 0.322327f},
-{0.000000f, -0.081642f, 0.313504f},
-{0.000000f, -0.058782f, 0.310238f},
-{-0.329512f, 0.014450f, 0.210762f},
-{-0.104104f, 0.315183f, 0.319152f},
-{-0.002051f, 0.164069f, 0.306324f},
-{-0.038166f, -0.049432f, 0.331222f},
-{0.048231f, -0.072961f, 0.326080f},
-{-0.042552f, -0.120692f, 0.321909f},
-{-0.000730f, -0.351769f, 0.291014f},
-{-0.123473f, 0.161874f, 0.334230f},
-{-0.231196f, 0.109070f, 0.289935f},
-{-0.173056f, 0.036714f, 0.300512f},
-{0.128917f, 0.161575f, 0.338910f},
-{0.093171f, 0.055323f, 0.316271f},
-{0.173275f, 0.028922f, 0.291475f},
-{0.234337f, 0.104445f, 0.283176f},
-{-0.091788f, 0.054809f, 0.315092f},
-{-0.326318f, 0.164228f, 0.225070f},
-{0.371658f, 0.100093f, 0.203606f},
-{-0.144281f, 0.403229f, 0.077034f},
-{-0.352844f, 0.219879f, -0.182010f},
-{-0.104360f, -0.114234f, 0.177619f},
-{0.154379f, -0.411700f, 0.213185f},
-{0.070712f, -0.187195f, 0.123097f},
-{0.123865f, 0.284086f, -0.325201f},
-{0.194626f, 0.376615f, 0.063628f},
-{0.299997f, 0.182766f, 0.151634f},
-{-0.265603f, -0.037652f, -0.146414f},
-{-0.496771f, 0.013253f, -0.186005f},
-{0.382083f, 0.176905f, -0.103227f},
-{0.318316f, 0.002299f, -0.103358f},
-{-0.328479f, 0.004234f, -0.105603f},
-{-0.355811f, 0.151986f, -0.080206f},
-{-0.496120f, 0.181195f, -0.178169f},
-{0.503229f, 0.171405f, -0.185858f},
-{0.496681f, 0.008987f, -0.192762f},
-{0.291129f, -0.025899f, -0.156631f}
-};
+static void init_game(GameState* state);
+static void update_player(GameState* state, float dt, const GameInputData* inputs);
+static void update_bullets(GameState* state, float dt);
+static void update_asteroids(GameState* state, float dt);
+static void update_laser(GameState* state, float dt);
+static void handle_spawning(GameState* state, float dt);
+static void handle_collisions(GameState* state);
+static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis);
+static void world_to_screen(float wx, float wy, uint8_t* sx, uint8_t* sy);
+static void draw_filled_rect(JaDraw<WIDTH, HEIGHT>& canvas, uint8_t x, uint8_t y, uint8_t w, uint8_t h, bool white);
 
 
-const int CUBE_TRIANGLES[][3] = {
-{8, 27, 11},
-{5, 10, 18},
-{15, 10, 9},
-{23, 15, 9},
-{24, 5, 21},
-{8, 16, 23},
-{12, 4, 19},
-{19, 22, 12},
-{28, 14, 3},
-{12, 14, 28},
-{14, 13, 3},
-{1, 7, 6},
-{1, 7, 11},
-{7, 12, 22},
-{11, 7, 22},
-{4, 21, 20},
-{16, 8, 17},
-{24, 32, 5},
-{29, 28, 3},
-{29, 3, 27},
-{26, 25, 30},
-{31, 32, 35},
-{23, 25, 26},
-{10, 5, 32},
-{9, 10, 23},
-{26, 38, 23},
-{2, 36, 29},
-{42, 30, 35},
-{26, 2, 33},
-{24, 36, 35},
-{38, 39, 37},
-{8, 38, 37},
-{36, 40, 35},
-{41, 40, 36},
-{39, 34, 37},
-{38, 26, 39},
-{34, 39, 33},
-{4, 12, 28},
-{3, 13, 27},
-{4, 24, 21},
-{23, 16, 15},
-{11, 22, 8},
-{29, 33, 2},
-{22, 10, 15},
-{12, 13, 14},
-{1, 12, 7},
-{11, 12, 1},
-{13, 12, 11},
-{13, 11, 27},
-{19, 4, 20},
-{17, 8, 22},
-{5, 18, 21},
-{19, 10, 22},
-{4, 28, 29},
-{10, 31, 25},
-{30, 42, 2},
-{26, 30, 2},
-{25, 31, 30},
-{30, 31, 35},
-{37, 27, 8},
-{23, 10, 25},
-{24, 35, 32},
-{23, 38, 8},
-{36, 4, 29},
-{35, 41, 42},
-{2, 42, 36},
-{41, 36, 42},
-{33, 37, 34},
-{33, 39, 26},
-{29, 27, 33},
-{19, 18, 10},
-{10, 32, 31},
-{37, 33, 27},
-{36, 24, 4},
-{35, 40, 41}
-};
+static float rand_float(float min, float max) {
+    return min + ((float)rand() / RAND_MAX) * (max - min);
+}
 
-// --- Dithering Patterns (4x4 Bayer Matrix based) ---
-// We'll have 5 levels of brightness: 0%, 25%, 50%, 75%, 100%
-const int NUM_DITHER_PATTERNS = 5;
-const bool DITHER_PATTERNS[NUM_DITHER_PATTERNS][4][4] = {
-    // 0% (Black)
-    {{0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0}},
-    // 25% 
-    {{1,0,0,0}, {0,0,0,0}, {0,0,1,0}, {0,0,0,0}},
-    // 50%
-    {{1,0,1,0}, {0,1,0,1}, {1,0,1,0}, {0,1,0,1}},
-    // 75%
-    {{1,1,1,0}, {1,0,1,1}, {1,1,0,1}, {0,1,1,1}},
-    // 100% (White)
-    {{1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}}
-};
+SpaceGame3dApplet::SpaceGame3dApplet() { }
 
-const uint8_t BAYER_MATRIX_8x8[8][8] = {
-    {  0, 32,  8, 40,  2, 34, 10, 42 },
-    { 48, 16, 56, 24, 50, 18, 58, 26 },
-    { 12, 44,  4, 36, 14, 46,  6, 38 },
-    { 60, 28, 52, 20, 62, 30, 54, 22 },
-    {  3, 35, 11, 43,  1, 33,  9, 41 },
-    { 51, 19, 59, 27, 49, 17, 57, 25 },
-    { 15, 47,  7, 39, 13, 45,  5, 37 },
-    { 63, 31, 55, 23, 61, 29, 53, 21 }
-};
+static void drawPixel(JaDraw<WIDTH, HEIGHT>& canvas, uint8_t x, uint8_t y, bool white)
+{
+    canvas.drawPixel(x, y, white ? Colors::White : Colors::Black);
+}
 
-// --- ADD THIS a 64x64 Blue Noise Texture (replaces the Bayer Matrix) ---
-// This tileable texture provides high-quality stochastic dithering.
-// NOTE: This array consumes 4096 bytes of memory.
+static void clear_canvas(JaDraw<WIDTH, HEIGHT>& canvas)
+{
+    canvas.clear(0);
+}
+
+static void init_game(GameState* state) {
+    //memset(state, 0, sizeof(GameState));
+
+    // Init player
+    state->player.pos.x = 0.0f;
+    state->player.pos.y = PLAYER_Y_POS;
+    state->player.hp = PLAYER_INITIAL_HP;
+    state->player.laserChargeTime = 0.0f;
+
+    // Init timers and flags
+    state->asteroidSpawnTimer = ASTEROID_SPAWN_INTERVAL;
+    state->gameOver = false;
+    state->fireBtnWasPressed = false;
+    
+    // Seed random number generator. In a real embedded system without a time source,
+    // you might use an unconnected ADC pin or some other source of entropy.
+    // For now, this is fine but will produce the same sequence on each run.
+    srand(12345);
+}
+
+void SpaceGame3dApplet::setup() { }
+
+void SpaceGame3dApplet::loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputData& inputs) {
+    static unsigned long millis = 0;
+    millis += (unsigned long)(dt * 1000.0f);
+    gameInputData.fireBtnPressed = inputs.pressed;
+    gameInputData.stickX = (float)inputs.rotation / 100.0f;
+    GameInputData* gameInputs = &gameInputData;
+    canvas.clear(0);
+    canvas.drawPixel(0, 0, 0xFFFFFFFF);
+    static GameState state;
+    static bool initialized = false;
+
+    // Initialize the game state on the first call
+    if (!initialized) {
+        init_game(&state);
+        initialized = true;
+    }
+
+    if (!state.gameOver) {
+        // --- Update Game Logic ---
+        update_player(&state, dt, gameInputs);
+        update_bullets(&state, dt);
+        update_asteroids(&state, dt);
+        update_laser(&state, dt);
+        
+        // --- Handle Interactions ---
+        handle_collisions(&state);
+        handle_spawning(&state, dt);
+
+        // Check for game over condition
+        if (state.player.hp <= 0) {
+            state.gameOver = true;
+        }
+    } else {
+        // If game is over, maybe listen for a reset button
+        if (gameInputs->fireBtnPressed && !state.fireBtnWasPressed) {
+            init_game(&state); // Restart the game
+        }
+        state.fireBtnWasPressed = gameInputs->fireBtnPressed;
+    }
+
+
+    // --- Render the Game State to the Canvas ---
+    draw_game_3d(&state, canvas, millis);
+}
+
+const char* SpaceGame3dApplet::getName() const {
+    return "Space game";
+}
+
+static void fire_bullet(GameState* state) {
+    for (int i = 0; i < MAX_BULLETS; ++i) {
+        if (!state->bullets[i].active) {
+            state->bullets[i].active = true;
+            state->bullets[i].pos = state->player.pos;
+            state->bullets[i].pos.y += PLAYER_HEIGHT / 2.0f; // Fire from top of ship
+            state->bullets[i].vel.x = 0;
+            state->bullets[i].vel.y = BULLET_SPEED;
+            return; // Exit after firing one bullet
+        }
+    }
+}
+
+static void fire_laser(GameState* state) {
+    if (state->laser.active) return; // Only one laser at a time
+
+    state->laser.active = true;
+    state->laser.x_pos = state->player.pos.x;
+    state->laser.duration = LASER_DURATION;
+    
+    // Power is proportional to charge time, capped at max
+    float charge_ratio = state->player.laserChargeTime / LASER_MAX_CHARGE_TIME;
+    if (charge_ratio > 1.0f) charge_ratio = 1.0f;
+    state->laser.power = charge_ratio;
+}
+
+
+static void update_player(GameState* state, float dt, const GameInputData* inputs) {
+    // Movement
+    state->player.pos.x += inputs->stickX * PLAYER_SPEED * dt;
+
+    // Screen bounds check
+    float half_width = PLAYER_WIDTH / 2.0f;
+    if (state->player.pos.x < -1.0f + half_width) {
+        state->player.pos.x = -1.0f + half_width;
+    }
+    if (state->player.pos.x > 1.0f - half_width) {
+        state->player.pos.x = 1.0f - half_width;
+    }
+
+    // Firing logic
+    if (inputs->fireBtnPressed) {
+        state->player.laserChargeTime += dt;
+    } else {
+        if (state->fireBtnWasPressed) { // This is a button release event
+            if (state->player.laserChargeTime > LASER_CHARGE_TIME_FOR_BULLET) {
+                fire_laser(state);
+            } else {
+                fire_bullet(state);
+            }
+        }
+        state->player.laserChargeTime = 0.0f;
+    }
+    state->fireBtnWasPressed = inputs->fireBtnPressed;
+}
+
+static void update_bullets(GameState* state, float dt) {
+    for (int i = 0; i < MAX_BULLETS; ++i) {
+        if (state->bullets[i].active) {
+            state->bullets[i].pos.y += state->bullets[i].vel.y * dt;
+            // Deactivate if it goes off-screen
+            if (state->bullets[i].pos.y > 1.1f) {
+                state->bullets[i].active = false;
+            }
+        }
+    }
+}
+
+static void update_asteroids(GameState* state, float dt) {
+    for (int i = 0; i < MAX_ASTEROIDS; ++i) {
+        if (state->asteroids[i].active) {
+            state->asteroids[i].pos.x += state->asteroids[i].vel.x * dt;
+            state->asteroids[i].pos.y += state->asteroids[i].vel.y * dt;
+            // Deactivate if it goes off-screen
+            if (state->asteroids[i].pos.y < -1.1f) {
+                state->asteroids[i].active = false;
+            }
+        }
+    }
+}
+
+static void update_laser(GameState* state, float dt) {
+    if (state->laser.active) {
+        state->laser.duration -= dt;
+        if (state->laser.duration <= 0) {
+            state->laser.active = false;
+        }
+    }
+}
+
+
+static void handle_spawning(GameState* state, float dt) {
+    state->asteroidSpawnTimer -= dt;
+    if (state->asteroidSpawnTimer <= 0) {
+        state->asteroidSpawnTimer = ASTEROID_SPAWN_INTERVAL * rand_float(0.7f, 1.3f);
+        
+        // Find an inactive asteroid to spawn
+        for (int i = 0; i < MAX_ASTEROIDS; ++i) {
+            if (!state->asteroids[i].active) {
+                state->asteroids[i].active = true;
+                state->asteroids[i].pos.x = rand_float(-1.0f, 1.0f);
+                state->asteroids[i].pos.y = 1.1f; // Spawn just above the screen
+                state->asteroids[i].vel.x = rand_float(-0.1f, 0.1f);
+                state->asteroids[i].vel.y = -rand_float(ASTEROID_MIN_SPEED, ASTEROID_MAX_SPEED);
+                state->asteroids[i].size = rand_float(ASTEROID_MIN_SIZE, ASTEROID_MAX_SIZE);
+                state->asteroids[i].hp = state->asteroids[i].size * 150.0f; // Bigger asteroids have more HP
+                return; // Spawn one per frame
+            }
+        }
+    }
+}
+
+static void handle_collisions(GameState* state) {
+    // --- Bullets vs Asteroids ---
+    for (int b = 0; b < MAX_BULLETS; ++b) {
+        if (!state->bullets[b].active) continue;
+        
+        for (int a = 0; a < MAX_ASTEROIDS; ++a) {
+            if (!state->asteroids[a].active) continue;
+
+            // Simple AABB collision check
+            float b_half_w = BULLET_WIDTH / 2.0f;
+            float b_half_h = BULLET_HEIGHT / 2.0f;
+            float a_half_s = state->asteroids[a].size / 2.0f;
+
+            if (fabsf(state->bullets[b].pos.x - state->asteroids[a].pos.x) < (b_half_w + a_half_s) &&
+                fabsf(state->bullets[b].pos.y - state->asteroids[a].pos.y) < (b_half_h + a_half_s))
+            {
+                state->asteroids[a].hp -= BULLET_DAMAGE;
+                state->bullets[b].active = false; // Bullet is used up
+                if (state->asteroids[a].hp <= 0) {
+                    state->asteroids[a].active = false;
+                }
+                break; // A bullet can only hit one asteroid
+            }
+        }
+    }
+
+    // --- Laser vs Asteroids ---
+    if (state->laser.active) {
+        for (int a = 0; a < MAX_ASTEROIDS; ++a) {
+            if (!state->asteroids[a].active) continue;
+
+            float l_half_w = LASER_WIDTH / 2.0f;
+            float a_half_s = state->asteroids[a].size / 2.0f;
+
+            if (fabsf(state->laser.x_pos - state->asteroids[a].pos.x) < (l_half_w + a_half_s)) {
+                // Laser does damage over time, scaled by dt
+                state->asteroids[a].hp -= LASER_BASE_DAMAGE * state->laser.power * (1.0f / 60.0f); // Assuming 60fps for damage scaling
+                 if (state->asteroids[a].hp <= 0) {
+                    state->asteroids[a].active = false;
+                }
+            }
+        }
+    }
+
+    // --- Asteroids vs Player ---
+    for (int a = 0; a < MAX_ASTEROIDS; ++a) {
+        if (!state->asteroids[a].active) continue;
+        
+        float p_half_w = PLAYER_WIDTH / 2.0f;
+        float p_half_h = PLAYER_HEIGHT / 2.0f;
+        float a_half_s = state->asteroids[a].size / 2.0f;
+
+        if (fabsf(state->player.pos.x - state->asteroids[a].pos.x) < (p_half_w + a_half_s) &&
+            fabsf(state->player.pos.y - state->asteroids[a].pos.y) < (p_half_h + a_half_s))
+        {
+            state->player.hp -= state->asteroids[a].size * 100.0f; // Damage based on size
+            state->asteroids[a].active = false; // Asteroid is destroyed
+        }
+    }
+}
+
+////////////////////////// drawing ///////////////////////////////////////////////////////////////////
+
 const uint8_t BLUE_NOISE_64x64[64][64] = {
   {0xe5, 0x91, 0xf4, 0x9e, 0xc0, 0xf9, 0x3d, 0xdc, 0xa6, 0x2e, 0x1f, 0xc2, 0xf2, 0x15, 0xcd, 0x27, 0x6e, 0x59, 0x97, 0x7a, 0x20, 0x70, 0x07, 0x7f, 0xa8, 0x3e, 0x99, 0xff, 0x5c, 0xbf, 0x09, 0x6c, 0x30, 0x95, 0x0a, 0xb4, 0x34, 0xfc, 0x97, 0xc7, 0xb1, 0x03, 0x61, 0xe3, 0xa8, 0x59, 0xda, 0x70, 0x3e, 0x5d, 0x7a, 0xa7, 0x2f, 0x86, 0x40, 0x5b, 0x26, 0xcf, 0x00, 0x99, 0x5c, 0xd3, 0x7c, 0xa1, },
   {0x2d, 0xba, 0x48, 0x08, 0xcd, 0x7c, 0x1c, 0xb3, 0x6d, 0xfe, 0x9c, 0x4b, 0x79, 0x68, 0x91, 0x3e, 0xf1, 0xb1, 0x47, 0xfc, 0xc5, 0xe3, 0x5d, 0x49, 0xda, 0x10, 0xcb, 0x26, 0x36, 0x90, 0xed, 0x41, 0x85, 0x60, 0xe9, 0xd3, 0x82, 0x5c, 0x1c, 0x6a, 0xe8, 0x3b, 0x4c, 0x77, 0x8e, 0x15, 0x48, 0x85, 0xbd, 0xfd, 0x0b, 0xdd, 0x66, 0xf0, 0x9c, 0xf8, 0x7a, 0xbc, 0x6c, 0xfa, 0x2a, 0xaa, 0x49, 0x21, },
@@ -271,120 +451,6 @@ const uint8_t BLUE_NOISE_64x64[64][64] = {
   {0x53, 0xb2, 0xd1, 0x22, 0xdf, 0xf3, 0x83, 0x0e, 0xe5, 0x8f, 0x25, 0xab, 0xc8, 0x6f, 0xa3, 0xf4, 0xd3, 0x43, 0xff, 0x63, 0xd9, 0x0f, 0xaf, 0x36, 0xea, 0x68, 0xa3, 0xe1, 0xc4, 0x2f, 0x49, 0x73, 0xce, 0x43, 0x6a, 0x38, 0x0c, 0x5f, 0x2b, 0x6e, 0x4b, 0x7f, 0x15, 0x5a, 0xed, 0x49, 0xb9, 0x80, 0xd8, 0xca, 0xaa, 0xf5, 0xde, 0x57, 0x93, 0x6b, 0xba, 0xf1, 0xaa, 0x5b, 0xfc, 0x8b, 0x9f, 0x73, },
   {0x8a, 0x2d, 0x6e, 0x9b, 0x50, 0xba, 0x32, 0x43, 0x76, 0xc2, 0x66, 0x49, 0x03, 0xeb, 0x5a, 0x0c, 0x6c, 0xae, 0x18, 0x2f, 0x91, 0x75, 0x5c, 0x83, 0x08, 0x54, 0x77, 0x3a, 0x82, 0xd4, 0x9f, 0x1f, 0xe3, 0xac, 0xf2, 0xca, 0x91, 0xb3, 0xd4, 0xeb, 0x1e, 0x8e, 0xb2, 0xd5, 0x74, 0xc8, 0x1e, 0xfc, 0x39, 0x53, 0x99, 0x31, 0x82, 0x3d, 0xfe, 0x29, 0x49, 0x74, 0x96, 0x30, 0xbd, 0x24, 0xe3, 0x3a},
 };
-
-// --- Helper Functions ---
-
-// Fills a triangle with a dithered pattern based on its brightness
-// void fillDitheredTriangle(JaDraw<WIDTH, HEIGHT>& canvas, const Vec2i& v1, const Vec2i& v2, const Vec2i& v3, float brightness) {
-//     // Sort vertices by Y coordinate (v1.y <= v2.y <= v3.y)
-//     Vec2i p[3] = {v1, v2, v3};
-//     if (p[0].y > p[1].y) std::swap(p[0], p[1]);
-//     if (p[1].y > p[2].y) std::swap(p[1], p[2]);
-//     if (p[0].y > p[1].y) std::swap(p[0], p[1]);
-    
-//     // Early exit if the triangle is completely outside the screen
-//     if (p[2].y < 0 || p[0].y >= canvas.height) return;
-//     if (std::max({p[0].x, p[1].x, p[2].x}) < 0 || std::min({p[0].x, p[1].x, p[2].x}) >= canvas.width) return;
-    
-//     // Convert brightness (0.0f-1.0f) to a dither level (0-64)
-//     // We multiply by 64 instead of 63 to correctly map 1.0 to the brightest level.
-//     float brightness_level = brightness * 64.0f;
-
-//     // Scanline rasterization
-//     int total_height = p[2].y - p[0].y;
-//     for (int y = p[0].y; y <= p[2].y; ++y) {
-//         if (y < 0 || y >= canvas.height) continue;
-
-//         bool second_half = y > p[1].y || p[1].y == p[0].y;
-//         int segment_height = second_half ? (p[2].y - p[1].y) : (p[1].y - p[0].y);
-        
-//         if (segment_height == 0) continue;
-
-//         float alpha = (float)(y - p[0].y) / total_height;
-//         float beta  = (float)(y - (second_half ? p[1].y : p[0].y)) / segment_height;
-
-//         int ax = p[0].x + (p[2].x - p[0].x) * alpha;
-//         int bx = second_half ? (p[1].x + (p[2].x - p[1].x) * beta) : (p[0].x + (p[1].x - p[0].x) * beta);
-
-//         if (ax > bx) std::swap(ax, bx);
-        
-//         ax = std::max(0, ax);
-//         bx = std::min(canvas.width, bx);
-
-//         for (int x = ax; x < bx; ++x) {
-//             // --- MODIFIED DITHERING LOGIC ---
-//             // Get the threshold from the Bayer matrix for this pixel coordinate.
-//             // (x & 7) is a fast way to do (x % 8).
-//             uint8_t threshold = BAYER_MATRIX_8x8[y & 7][x & 7];
-            
-//             // If the triangle's brightness level is greater than the matrix's
-//             // threshold for this pixel, then draw the pixel.
-//             if (brightness_level > threshold) {
-//                 canvas.drawPixel(x, y, Colors::White);
-//             }
-//         }
-//     }
-// }
-
-// --- REPLACEMENT for the fillDitheredTriangle function ---
-// void fillDitheredTriangle(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis,
-//      const Vec2i& v1, const Vec2i& v2, const Vec2i& v3, float brightness)
-// {
-//     // Sort vertices by Y coordinate (v1.y <= v2.y <= v3.y)
-//     Vec2i p[3] = {v1, v2, v3};
-//     if (p[0].y > p[1].y) std::swap(p[0], p[1]);
-//     if (p[1].y > p[2].y) std::swap(p[1], p[2]);
-//     if (p[0].y > p[1].y) std::swap(p[0], p[1]);
-
-//     // Early exit if the triangle is completely outside the screen
-//     if (p[2].y < 0 || p[0].y >= canvas.height) return;
-//     if (std::max({p[0].x, p[1].x, p[2].x}) < 0 || std::min({p[0].x, p[1].x, p[2].x}) >= canvas.width) return;
-
-//     // Convert brightness (0.0f-1.0f) to a dither level (0-255)
-//     float brightness_level = brightness * 255.0f;
-
-//     // --- Animated Offset for Noise Texture ---
-//     // This makes the noise "sizzle" instead of being static on the screen.
-//     // We use different divisors for X and Y to avoid diagonal patterns.
-//     // The "& 63" is a fast way of doing "% 64".
-//     uint8_t offsetX = (millis / 3) & 63;
-//     uint8_t offsetY = (millis / 11) & 63;
-
-//     // Scanline rasterization
-//     int total_height = p[2].y - p[0].y;
-//     for (int y = p[0].y; y <= p[2].y; ++y) {
-//         if (y < 0 || y >= canvas.height) continue;
-
-//         bool second_half = y > p[1].y || p[1].y == p[0].y;
-//         int segment_height = second_half ? (p[2].y - p[1].y) : (p[1].y - p[0].y);
-        
-//         if (segment_height == 0) continue;
-
-//         float alpha = (float)(y - p[0].y) / total_height;
-//         float beta  = (float)(y - (second_half ? p[1].y : p[0].y)) / segment_height;
-
-//         int ax = p[0].x + (p[2].x - p[0].x) * alpha;
-//         int bx = second_half ? (p[1].x + (p[2].x - p[1].x) * beta) : (p[0].x + (p[1].x - p[0].x) * beta);
-
-//         if (ax > bx) std::swap(ax, bx);
-        
-//         ax = std::max(0, ax);
-//         bx = std::min(canvas.width, bx);
-
-//         for (int x = ax; x < bx; ++x) {
-//             // --- BLUE NOISE DITHERING LOGIC ---
-//             // Look up the threshold in the blue noise texture, applying the
-//             // animated offset. This makes the texture tile across the screen.
-//             uint8_t threshold = BLUE_NOISE_64x64[(y + offsetY) & 63][(x + offsetX) & 63];
-            
-//             // If the triangle's brightness is greater than the noise threshold
-//             // for this pixel, then draw the pixel.
-//             if (brightness_level > threshold) {
-//                 canvas.drawPixel(x, y, Colors::White);
-//             }
-//         }
-//     }
-// }
 
 
 void fillDitheredTriangle(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis,
@@ -483,108 +549,198 @@ void fillDitheredTriangle(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis,
     }
 }
 
+/**
+ * @brief Draws a 3D model made of triangles.
+ *
+ * @param canvas         The drawing surface.
+ * @param millis         Current time for dithering.
+ * @param vp_matrix      The combined View-Projection matrix.
+ * @param vertices       Array of model-space vertices.
+ * @param indices        Array of indices forming triangles.
+ * @param num_indices    Total number of indices to draw.
+ * @param position       World-space position of the object.
+ * @param rotation_y_rad Rotation angle in radians.
+ * @param scale          Uniform scale factor.
+ */
+static void draw_3d_model(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis, const Mat4f* vp_matrix,
+                          const Vec3f* vertices, const int* indices, int num_indices,
+                          Vec3f position, float rotation_y_rad, float scale)
+{
+    // 1. Create Model Matrix (Scale -> Rotate -> Translate)
+    Mat4f scale_mat = matrix_scale((Vec3f){scale, scale, scale});
+    Mat4f rot_mat = matrix_rotate_y(rotation_y_rad);
+    Mat4f trans_mat = matrix_translate(position);
+    Mat4f model_matrix = matrix_multiply(trans_mat, matrix_multiply(rot_mat, scale_mat));
 
-void MyApplet::loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputData& inputs) {
-    millis += dt * 1000;
-    canvas.clear(0);
-    // --- 1. Setup Transformation ---
-    // Calculate rotation angles based on time for smooth animation
-    float angleX = (millis / 8000.0f) * 2 * PI; // Slower rotation around X
-    float angleY = (millis / 6000.0f) * 2 * PI; // Faster rotation around Y
-    float sinX = sinf(angleX);
-    float cosX = cosf(angleX);
-    float sinY = sinf(angleY);
-    float cosY = cosf(angleY);
+    // 2. Create final Model-View-Projection (MVP) matrix
+    Mat4f mvp_matrix = matrix_multiply(*vp_matrix, model_matrix);
 
-    // Light source direction (normalized)
-    Vec3 light_direction = {0.0f, 0.5f, -1.0f};
-    // Normalize light direction vector
-    float light_mag = sqrtf(light_direction.x * light_direction.x + light_direction.y * light_direction.y + light_direction.z * light_direction.z);
-    light_direction.x /= light_mag; light_direction.y /= light_mag; light_direction.z /= light_mag;
+    // 3. Process and draw each triangle
+    for (int i = 0; i < num_indices; i += 3) {
+        Vec3f v_model[3];
+        v_model[0] = vertices[indices[i]];
+        v_model[1] = vertices[indices[i+1]];
+        v_model[2] = vertices[indices[i+2]];
 
-    // --- 2. Transform, Cull, and Project ---
-    Vec3 transformed_vertices[8];
-    std::vector<RenderTriangle> trianglesToRender;
-
-    // Process all 12 triangles of the cube
-    for (int i = 0; i < 76; ++i) {
-        Vec3 v[3], transformed_v[3];
+        Vec2i v_screen[3];
+        bool on_screen = true;
         
-        // Get the 3 vertices for this triangle from the original model
+        // Project all three vertices
         for (int j = 0; j < 3; ++j) {
-            v[j] = CUBE_VERTICES[CUBE_TRIANGLES[i][j]];
-
-            // Apply Y-axis rotation
-            float rotY_x = v[j].x * cosY - v[j].z * sinY;
-            float rotY_z = v[j].x * sinY + v[j].z * cosY;
-            
-            // Apply X-axis rotation to the result of Y-rotation
-            transformed_v[j].x = rotY_x;
-            transformed_v[j].y = v[j].y * cosX - rotY_z * sinX;
-            transformed_v[j].z = v[j].y * sinX + rotY_z * cosX;
-        }
-
-        // --- Back-face Culling & Shading ---
-        // Get two edges of the triangle
-        Vec3 edge1 = {transformed_v[1].x - transformed_v[0].x, transformed_v[1].y - transformed_v[0].y, transformed_v[1].z - transformed_v[0].z};
-        Vec3 edge2 = {transformed_v[2].x - transformed_v[0].x, transformed_v[2].y - transformed_v[0].y, transformed_v[2].z - transformed_v[0].z};
-
-        // Calculate the normal vector using the cross product
-        Vec3 normal;
-        normal.x = edge1.y * edge2.z - edge1.z * edge2.y;
-        normal.y = edge1.z * edge2.x - edge1.x * edge2.z;
-        normal.z = edge1.x * edge2.y - edge1.y * edge2.x;
-
-        // Check if the face is visible (if its normal is pointing towards the camera at Z=-infinity)
-        if (normal.z < 0) {
-            // --- Lighting Calculation (Flat Shading) ---
-            // Normalize the normal vector
-            float mag = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
-            normal.x /= mag; normal.y /= mag; normal.z /= mag;
-
-            // Calculate dot product between the normal and the light direction
-            float dp = normal.x * light_direction.x + normal.y * light_direction.y + normal.z * light_direction.z;
-            
-            // Clamp brightness from 0 to 1. Add some ambient light.
-            float brightness = std::max(0.0f, dp) * 0.8f + 0.1f;
-
-            // --- Perspective Projection ---
-            RenderTriangle tri;
-            tri.brightness = brightness;
-            tri.avgZ = 0;
-
-            for (int j = 0; j < 3; ++j) {
-                // Move cube away from camera
-                transformed_v[j].z += 1.0f;
-                tri.avgZ += transformed_v[j].z;
-
-                // Project 3D point to 2D screen
-                float invZ = 1.0f / transformed_v[j].z;
-                tri.p[j].x = static_cast<int>((transformed_v[j].x * invZ * (canvas.width * 0.8f)) + (canvas.width / 2));
-                tri.p[j].y = static_cast<int>((-transformed_v[j].y * invZ * (canvas.width * 0.8f)) + (canvas.height / 2));
+            if (!project_vertex(&v_model[j], &mvp_matrix, &v_screen[j], WIDTH, HEIGHT)) {
+                on_screen = false;
+                break; // Basic clipping: if any vertex is off-screen, skip triangle
             }
-            tri.avgZ /= 3.0f;
+        }
+        
+        if (on_screen) {
+            // Simple lighting: brightness based on how much a triangle faces the camera.
+            // A proper implementation would transform the normal, but we can fake it
+            // by checking the 2D triangle's winding order (back-face culling).
+            int cross_product_z = (v_screen[1].x - v_screen[0].x) * (v_screen[2].y - v_screen[0].y) -
+                                  (v_screen[1].y - v_screen[0].y) * (v_screen[2].x - v_screen[0].x);
 
-            trianglesToRender.push_back(tri);
+            if (cross_product_z > 0) { // If triangle is front-facing
+                // We'll use a fixed brightness for simplicity. A real implementation
+                // would calculate it based on a light source.
+                float brightness = 0.8f; 
+                fillDitheredTriangle(canvas, millis, v_screen[0], v_screen[1], v_screen[2], brightness);
+            }
+        }
+    }
+}
+
+// Helper to convert world coordinates [-1, 1] to screen pixels [0, Res-1]
+static void world_to_screen(float wx, float wy, uint8_t* sx, uint8_t* sy) {
+    *sx = (uint8_t)((wx + 1.0f) * 0.5f * WIDTH);
+    // Y is inverted: world +1 is top, screen 0 is top
+    *sy = (uint8_t)((-wy + 1.0f) * 0.5f * HEIGHT);
+}
+
+// Helper to draw a simple filled rectangle
+static void draw_filled_rect(JaDraw<WIDTH, HEIGHT>& canvas, uint8_t x, uint8_t y, uint8_t w, uint8_t h, bool white) {
+    // Clamp width and height to avoid overflow and infinite loops
+    if (x >= WIDTH || y >= HEIGHT) return;
+    uint8_t max_w = (x + w > WIDTH) ? (WIDTH - x) : w;
+    uint8_t max_h = (y + h > HEIGHT) ? (HEIGHT - y) : h;
+    for (uint8_t i = x; i < x + max_w; ++i) {
+        for (uint8_t j = y; j < y + max_h; ++j) {
+            drawPixel(canvas, i, j, white);
+        }
+    }
+}
+
+// Draws the GAME OVER message using rectangles
+void draw_game_over(JaDraw<WIDTH, HEIGHT>& canvas) {
+    // Simple "GAME OVER" text using rectangles
+    // G
+    draw_filled_rect(canvas, 20, 20, 15, 3, true); draw_filled_rect(canvas, 20, 20, 3, 15, true); draw_filled_rect(canvas, 20, 32, 15, 3, true); draw_filled_rect(canvas, 32, 26, 3, 9, true); draw_filled_rect(canvas, 28, 26, 5, 3, true);
+    // O
+    draw_filled_rect(canvas, 40, 20, 15, 3, true); draw_filled_rect(canvas, 40, 20, 3, 15, true); draw_filled_rect(canvas, 52, 20, 3, 15, true); draw_filled_rect(canvas, 40, 32, 15, 3, true);
+    // ... and so on for the rest of the text. This is tedious but works without fonts.
+    // For brevity, we'll just show one letter.
+}
+
+
+/**
+ * @brief Renders the 2D game state in a 3D world using the "On-the-Fly Interpretation" strategy.
+ *
+ * This function reads a pure 2D GameState and generates 3D visual data (like Y-coordinates
+ * and rotations) temporarily for rendering purposes only. The core GameState is not modified
+ * and contains no 3D data.
+ *
+ * @param state   A pointer to the const 2D game state.
+ * @param canvas  Pointer to the canvas to draw on.
+ * @param millis  Current timestamp in milliseconds for procedural effects like rotation.
+ */
+static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis) {
+    clear_canvas(canvas);
+
+    if (state->gameOver) {
+        draw_game_over(canvas);
+        return;
+    }
+
+    // --- Setup Camera and Projection (once per frame) ---
+    Vec3f camera_pos = {0.0f, -0.5f, -1.5f};
+    Vec3f camera_target = {0.0f, 0.0f, 0.0f};
+    Vec3f up_vector = {0.0f, -1.0f, 0.0f};
+    Mat4f view_matrix = matrix_look_at(camera_pos, camera_target, up_vector);
+    
+    float fov_rad = 70.0f * (3.14159f / 180.0f);
+    float aspect_ratio = (float)WIDTH / (float)HEIGHT;
+    Mat4f proj_matrix = matrix_perspective(fov_rad, aspect_ratio, 0.1f, 100.0f);
+
+    Mat4f vp_matrix = matrix_multiply(proj_matrix, view_matrix);
+
+    // --- Draw Player ---
+    {
+        // ADAPTATION: Convert 2D game position to a 3D world position on the XZ plane.
+        Vec3f player_pos_3d = {state->player.pos.x, 0.0f, state->player.pos.y};
+        
+        // The player ship can remain unrotated for a clean look.
+        float player_rotation_y = 0.0f; 
+        float player_scale = 0.1f;
+
+        draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
+                      player_pos_3d, player_rotation_y, player_scale);
+    }
+
+    // --- Draw Bullets ---
+    for (int i = 0; i < MAX_BULLETS; ++i) {
+        if (state->bullets[i].active) {
+            // ADAPTATION: Convert 2D bullet position to 3D world position.
+            Vec3f bullet_pos_3d = {state->bullets[i].pos.x, 0.0f, state->bullets[i].pos.y};
+            
+            // Bullets are simple; no rotation needed.
+            draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
+                          bullet_pos_3d, 0.0f, 0.02f /* scale */);
         }
     }
 
-    // --- 3. Sort Triangles (Painter's Algorithm) ---
-    // Sort from back to front (farthest to nearest)
-    std::sort(trianglesToRender.begin(), trianglesToRender.end(), [](const RenderTriangle& a, const RenderTriangle& b) {
-        return a.avgZ > b.avgZ;
-    });
+    // --- Draw Asteroids ---
+    for (int i = 0; i < MAX_ASTEROIDS; ++i) {
+        if (state->asteroids[i].active) {
+            // ADAPTATION: Convert 2D asteroid position to 3D world position.
+            Vec3f asteroid_pos_3d = {state->asteroids[i].pos.x, 0.0f, state->asteroids[i].pos.y};
+            
+            // GENERATION: Create a procedural rotation that doesn't exist in the game state.
+            // This makes them spin visually without affecting gameplay. The offset `i * 0.77f`
+            // ensures they don't all spin in perfect sync.
+            float time_sec = millis / 1000.0f;
+            float rotation_y = (time_sec * 1.2f) + (i * 0.77f);
+            
+            // Use the asteroid's 2D size directly for 3D scaling.
+            float scale = state->asteroids[i].size * 0.5f; // Adjust scale factor as needed
 
-    // --- 4. Rasterize Triangles ---
-    // A real application would clear the screen/framebuffer here.
-    // e.g., clearScreen();
-
-    for (const auto& tri : trianglesToRender) {
-        fillDitheredTriangle(canvas, millis, tri.p[0], tri.p[1], tri.p[2], tri.brightness);
+            draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
+                          asteroid_pos_3d, rotation_y, scale);
+        }
     }
-}
+    
+    // --- Draw Laser ---
+    if (state->laser.active) {
+        // The laser is a special case: a tall, thin wall.
+        // We build its model matrix manually for non-uniform scaling.
+        Mat4f scale_mat = matrix_scale((Vec3f){0.02f, 2.0f, 2.0f}); // Thin in X, tall in Y/Z
+        Mat4f trans_mat = matrix_translate((Vec3f){state->laser.x_pos, 0.0f, 0.0f});
+        Mat4f model_matrix = matrix_multiply(trans_mat, scale_mat);
 
-const char* MyApplet::getName() const {
-    return "idk"; // Updated name
-}
+        // Create the final MVP matrix just for this object.
+        Mat4f laser_mvp = matrix_multiply(vp_matrix, model_matrix);
 
+        // This would require a modification to draw_3d_model or drawing it manually here.
+        // For simplicity, we can reuse draw_3d_model by just passing in a pre-made MVP.
+        // (This would be an extension to the helper, but the concept stands).
+        // Let's just draw a standard cube there for now.
+        Vec3f laser_pos_3d = { state->laser.x_pos, 0.0f, 0.0f };
+        draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
+                          laser_pos_3d, 0.0f, 0.5f); // Simplified representation
+    }
+    
+    // --- Draw UI (HP Bar) ---
+    // The UI is pure 2D screen space and is unaffected by the 3D world.
+    // We use the helper that draws a rect from two triangles.
+    uint8_t hp_bar_width = (uint8_t)((state->player.hp / PLAYER_INITIAL_HP) * (WIDTH - 4));
+    draw_filled_rect(canvas, 2, HEIGHT - 5, hp_bar_width, 3, true);
+}

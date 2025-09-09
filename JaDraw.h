@@ -466,6 +466,54 @@ public:
 
     JaDraw() : canvas{} {}
 
+    uint32_t hsvToRgba(float H_input, float S_input, float V_input, uint8_t alpha = 0xFF) {
+        float H_norm, S_norm, V_norm;
+        // 1. Normalize and Wrap Hue (H) to [0.0, 1.0)
+        // fmodf can return negative for negative H_input
+        H_norm = fmodf(H_input, 1.0f);
+        if (H_norm < 0.0f) {
+            H_norm += 1.0f;
+        }
+        // 2. Clamp Saturation (S) to [0.0, 1.0]
+        S_norm = fmaxf(0.0f, fminf(1.0f, S_input));
+        // 3. Clamp Value (V) to [0.0, 1.0]
+        V_norm = fmaxf(0.0f, fminf(1.0f, V_input));
+        // The original algorithm expects H in degrees [0, 360)
+        // S and V are already in [0, 1] as required by s, v in the original
+        float h_degrees = H_norm * 360.0f;
+        // Ensure h_degrees is strictly less than 360.
+        // If H_norm was 1.0 (e.g. from H_input = 1.0, 2.0 etc.), h_degrees would be 360.
+        // Treat 360 degrees as 0 degrees.
+        if (h_degrees >= 360.0f) {
+            h_degrees = 0.0f;
+        }
+        float C = S_norm * V_norm; // Chroma
+        float X = C * (1.0f - fabsf(fmodf(h_degrees / 60.0f, 2.0f) - 1.0f));
+        float m = V_norm - C;
+        float r_float, g_float, b_float;
+        if (h_degrees >= 0.0f && h_degrees < 60.0f) {
+            r_float = C; g_float = X; b_float = 0.0f;
+        } else if (h_degrees >= 60.0f && h_degrees < 120.0f) {
+            r_float = X; g_float = C; b_float = 0.0f;
+        } else if (h_degrees >= 120.0f && h_degrees < 180.0f) {
+            r_float = 0.0f; g_float = C; b_float = X;
+        } else if (h_degrees >= 180.0f && h_degrees < 240.0f) {
+            r_float = 0.0f; g_float = X; b_float = C;
+        } else if (h_degrees >= 240.0f && h_degrees < 300.0f) {
+            r_float = X; g_float = 0.0f; b_float = C;
+        } else { // h_degrees >= 300.0f && h_degrees < 360.0f
+            r_float = C; g_float = 0.0f; b_float = X;
+        }
+        int R = static_cast<int>((r_float + m) * 255.0f);
+        int G = static_cast<int>((g_float + m) * 255.0f);
+        int B = static_cast<int>((b_float + m) * 255.0f);
+        // Final clamping for safety, though mathematically they should be in range
+        R = std::max(0, std::min(255, R));
+        G = std::max(0, std::min(255, G));
+        B = std::max(0, std::min(255, B));
+        return JADRAW_RGBA(R, G, B, alpha);
+    }
+
     /**
      * @brief Clears the canvas to a specified color.
      * @param color The clear color (RGBA). Alpha component is ignored; canvas alpha is always set to 255 (opaque).

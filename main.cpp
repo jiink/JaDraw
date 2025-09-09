@@ -8,12 +8,14 @@
 #include <stdexcept>
 #include <span>
 #include "system.h"
-#include "MyApplet.h"
-#include "ClockApplet.h"
+//#include "MyApplet.h"
+//#include "ClockApplet.h"
+//#include "SpaceGameApplet.h"
+#include "SpaceGame3dApplet.h"
 
 const int CANVAS_WIDTH = WIDTH;
 const int CANVAS_HEIGHT = HEIGHT;
-const int SCREEN_SCALE = 10;
+const int SCREEN_SCALE = 2;
 const int SCREEN_WIDTH = CANVAS_WIDTH * SCREEN_SCALE;
 const int SCREEN_HEIGHT = CANVAS_HEIGHT * SCREEN_SCALE;
 
@@ -65,7 +67,7 @@ int main(int argc, char* argv[]) {
     bool quit = false;
     SDL_Event e;
     float deltaTime = 0.016f;
-    ClockApplet applet;
+    SpaceGame3dApplet applet;
     applet.setup();
     while (!quit) {
         while (SDL_PollEvent(&e) != 0) {
@@ -73,8 +75,19 @@ int main(int argc, char* argv[]) {
                 quit = true;
             }
         }
-        InputData nothing;
-        applet.loop(jdrw, deltaTime, nothing);
+        // Handle input
+        InputData input;
+        const Uint8* state = SDL_GetKeyboardState(NULL);
+        if (state[SDL_SCANCODE_LEFT]) {
+            input.rotation = -20;
+        } else if (state[SDL_SCANCODE_RIGHT]) {
+            input.rotation = 20;
+        } else {
+            input.rotation = 0;
+        }
+        input.pressed = state[SDL_SCANCODE_Z];
+
+        applet.loop(jdrw, deltaTime, input);
 
         int pitch = CANVAS_WIDTH * sizeof(uint32_t);
         SDL_UpdateTexture(texture, NULL, jdrw.canvas.data(), pitch);

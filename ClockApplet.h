@@ -74,7 +74,8 @@ void ClockApplet::loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputData&
         currentTime.hour,
         currentTime.minute,
         currentTime.second);
-    canvas.drawText(out, 0, 0, 2.6, Colors::Magenta);
+    float hue = (currentTime.hour % 12) / 12.0f;
+    canvas.drawText(out, 8, 8, 2.5, canvas.hsvToRgba(hue, 0.6, 1), false);
 }
 
 const char* ClockApplet::getName() const {

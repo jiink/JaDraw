@@ -1,3 +1,3 @@
 #pragma once
-#define WIDTH 64
-#define HEIGHT 32
+#define WIDTH 128
+#define HEIGHT 64
