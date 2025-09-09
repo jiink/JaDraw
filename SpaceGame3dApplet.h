@@ -17,10 +17,10 @@
 #define BULLET_WIDTH 0.03f
 #define BULLET_HEIGHT 0.05f
 #define BULLET_DAMAGE 10.0f
-#define LASER_CHARGE_TIME_FOR_BULLET 0.2f
+#define LASER_CHARGE_TIME_FOR_BULLET 0.5f
 #define LASER_MAX_CHARGE_TIME 2.0f
 #define LASER_WIDTH 0.04f
-#define LASER_DURATION 0.15f
+#define LASER_DURATION 0.85f
 #define LASER_BASE_DAMAGE 50.0f
 
 #define ASTEROID_SPAWN_INTERVAL 1.5f
@@ -98,6 +98,40 @@ const int CUBE_INDICES[] = {
 };
 const int CUBE_NUM_INDICES = 36;
 
+
+// --- A simple, Star Fox-style Spaceship Model ---
+// Centered at the origin, pointing forward along the -Z axis.
+const Vec3f SHIP_VERTICES[] = {
+    // Main Body (Pyramid)
+    { 0.0f,  0.0f, -0.75f}, // 0: Nose tip
+    { 0.2f,  0.15f, 0.5f }, // 1: Top Right Rear
+    { 0.2f, -0.15f, 0.5f }, // 2: Bottom Right Rear
+    {-0.2f, -0.15f, 0.5f }, // 3: Bottom Left Rear
+    {-0.2f,  0.15f, 0.5f }, // 4: Top Left Rear
+
+    // Wings
+    { 1.0f,  0.0f,  0.25f}, // 5: Right Wing Tip
+    {-1.0f,  0.0f,  0.25f}  // 6: Left Wing Tip
+};
+const int SHIP_NUM_VERTICES = 7;
+
+// 8 triangles, 3 indices per triangle
+const int SHIP_INDICES[] = {
+    // Main Body (4 triangles form the pyramid)
+    0, 4, 1,  // Top face
+    0, 1, 2,  // Right face
+    0, 2, 3,  // Bottom face
+    0, 3, 4,  // Left face
+
+    // Wings (2 triangles, one for each wing)
+    1, 2, 5,  // Right Wing (connects to the right side of the body)
+    4, 6, 3,  // Left Wing (connects to the left side of the body)
+    
+    // Back Panel (2 triangles to close the hole at the back)
+    1, 4, 3,
+    1, 3, 2
+};
+const int SHIP_NUM_INDICES = 24;
 
 static GameInputData gameInputData;
 
@@ -695,10 +729,10 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
         Vec3f player_pos_3d = {state->player.pos.x, 0.0f, state->player.pos.y};
         
         // The player ship can remain unrotated for a clean look.
-        float player_rotation_y = 0.0f; 
-        float player_scale = 0.1f;
+        float player_rotation_y = 3.1f; 
+        float player_scale = 0.2f;
 
-        draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
+        draw_3d_model(canvas, millis, &vp_matrix, SHIP_VERTICES, SHIP_INDICES, SHIP_NUM_INDICES,
                       player_pos_3d, player_rotation_y, player_scale, &sun_direction);
     }
 
