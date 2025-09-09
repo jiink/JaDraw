@@ -1,6 +1,6 @@
 # JaDraw
 
-My C++ software graphics library for drawing to a bitmap. Good for embedded devices.
+My C++ software graphics library for drawing to a bitmap. Good for embedded devices with enough to hold a full 24-bit framebuffer.
 
 This gives functions that let you draw to a given bitmap. How to display the resulting image is up to your specific application.
 
