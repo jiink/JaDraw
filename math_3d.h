@@ -212,4 +212,14 @@ static inline bool project_vertex(const Vec3f* model_vertex, const Mat4f* mvp, V
     return true;
 }
 
+// Transforms a 3D vector by a 4x4 matrix (ignoring perspective division)
+// Useful for converting vertices from model to world space.
+static inline Vec3f transform_vertex(const Vec3f* v, const Mat4f* m) {
+    return (Vec3f) {
+        v->x * m->m[0][0] + v->y * m->m[0][1] + v->z * m->m[0][2] + m->m[0][3],
+        v->x * m->m[1][0] + v->y * m->m[1][1] + v->z * m->m[1][2] + m->m[1][3],
+        v->x * m->m[2][0] + v->y * m->m[2][1] + v->z * m->m[2][2] + m->m[2][3]
+    };
+}
+
 #endif // MATH_3D_H

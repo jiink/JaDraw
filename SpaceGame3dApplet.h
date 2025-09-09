@@ -454,12 +454,12 @@ const uint8_t BLUE_NOISE_64x64[64][64] = {
 
 
 void fillDitheredTriangle(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis,
-     const Vec2i& v1, const Vec2i& v2, const Vec2i& v3, float brightness)
+     const Vec2i* v1, const Vec2i* v2, const Vec2i* v3, float brightness)
 {
     // --- Initial Setup ---
 
     // Sort vertices by Y coordinate (p0.y <= p1.y <= p2.y) using pointers to avoid copies.
-    const Vec2i* p[3] = {&v1, &v2, &v3};
+    const Vec2i* p[3] = {v1, v2, v3};
     if (p[0]->y > p[1]->y) std::swap(p[0], p[1]);
     if (p[1]->y > p[2]->y) std::swap(p[1], p[2]);
     if (p[0]->y > p[1]->y) std::swap(p[0], p[1]);
@@ -550,61 +550,76 @@ void fillDitheredTriangle(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis,
 }
 
 /**
- * @brief Draws a 3D model made of triangles.
+ * @brief Draws a 3D model with directional lighting.
  *
- * @param canvas         The drawing surface.
- * @param millis         Current time for dithering.
- * @param vp_matrix      The combined View-Projection matrix.
- * @param vertices       Array of model-space vertices.
- * @param indices        Array of indices forming triangles.
- * @param num_indices    Total number of indices to draw.
- * @param position       World-space position of the object.
- * @param rotation_y_rad Rotation angle in radians.
- * @param scale          Uniform scale factor.
+ * @param ... (previous params)
+ * @param world_light_dir A normalized vector pointing TOWARDS the light source.
  */
 static void draw_3d_model(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis, const Mat4f* vp_matrix,
                           const Vec3f* vertices, const int* indices, int num_indices,
-                          Vec3f position, float rotation_y_rad, float scale)
+                          Vec3f position, float rotation_y_rad, float scale,
+                          const Vec3f* world_light_dir)
 {
-    // 1. Create Model Matrix (Scale -> Rotate -> Translate)
+    // 1. Create Model and MVP Matrices
     Mat4f scale_mat = matrix_scale((Vec3f){scale, scale, scale});
     Mat4f rot_mat = matrix_rotate_y(rotation_y_rad);
     Mat4f trans_mat = matrix_translate(position);
+    // Model matrix transforms from local model space to world space
     Mat4f model_matrix = matrix_multiply(trans_mat, matrix_multiply(rot_mat, scale_mat));
-
-    // 2. Create final Model-View-Projection (MVP) matrix
     Mat4f mvp_matrix = matrix_multiply(*vp_matrix, model_matrix);
 
-    // 3. Process and draw each triangle
-    for (int i = 0; i < num_indices; i += 3) {
-        Vec3f v_model[3];
-        v_model[0] = vertices[indices[i]];
-        v_model[1] = vertices[indices[i+1]];
-        v_model[2] = vertices[indices[i+2]];
+    const float AMBIENT_LIGHT = 0.0f; // Base brightness for unlit areas
+    const float DIFFUSE_STRENGTH = 1.0f; // How strong the sun is
 
+    // 2. Process and draw each triangle
+    for (int i = 0; i < num_indices; i += 3) {
+        const Vec3f* v_model[3];
+        v_model[0] = &vertices[indices[i]];
+        v_model[1] = &vertices[indices[i+1]];
+        v_model[2] = &vertices[indices[i+2]];
+
+        // --- Lighting Calculation (in World Space) ---
+        // a. Transform triangle vertices to world space to calculate the normal
+        Vec3f v_world[3];
+        v_world[0] = transform_vertex(v_model[0], &model_matrix);
+        v_world[1] = transform_vertex(v_model[1], &model_matrix);
+        v_world[2] = transform_vertex(v_model[2], &model_matrix);
+
+        // b. Calculate face normal
+        Vec3f edge1 = vec3_subtract(v_world[1], v_world[0]);
+        Vec3f edge2 = vec3_subtract(v_world[2], v_world[0]);
+        Vec3f face_normal = vec3_normalize(vec3_cross(edge1, edge2));
+
+        // c. Calculate diffuse light intensity using the dot product
+        float diffuse_intensity = vec3_dot(face_normal, *world_light_dir);
+
+        // --- Projection and Drawing ---
+        // Project the original model-space vertices to the screen
         Vec2i v_screen[3];
         bool on_screen = true;
-        
-        // Project all three vertices
         for (int j = 0; j < 3; ++j) {
-            if (!project_vertex(&v_model[j], &mvp_matrix, &v_screen[j], WIDTH, HEIGHT)) {
+            if (!project_vertex(v_model[j], &mvp_matrix, &v_screen[j], WIDTH, HEIGHT)) {
                 on_screen = false;
-                break; // Basic clipping: if any vertex is off-screen, skip triangle
+                break;
             }
         }
         
         if (on_screen) {
-            // Simple lighting: brightness based on how much a triangle faces the camera.
-            // A proper implementation would transform the normal, but we can fake it
-            // by checking the 2D triangle's winding order (back-face culling).
+            // Use screen-space winding order for back-face culling (it's fast and effective)
             int cross_product_z = (v_screen[1].x - v_screen[0].x) * (v_screen[2].y - v_screen[0].y) -
                                   (v_screen[1].y - v_screen[0].y) * (v_screen[2].x - v_screen[0].x);
 
-            if (cross_product_z > 0) { // If triangle is front-facing
-                // We'll use a fixed brightness for simplicity. A real implementation
-                // would calculate it based on a light source.
-                float brightness = 0.8f; 
-                fillDitheredTriangle(canvas, millis, v_screen[0], v_screen[1], v_screen[2], brightness);
+            if (cross_product_z < 0) { // If triangle is facing the camera
+                // Final brightness is a combination of ambient and diffuse light
+                float brightness = AMBIENT_LIGHT;
+                if (diffuse_intensity > 0) { // Only add light if the face is lit
+                    brightness += diffuse_intensity * DIFFUSE_STRENGTH;
+                }
+
+                // Clamp brightness to a max of 1.0
+                if (brightness > 1.0f) brightness = 1.0f;
+
+                fillDitheredTriangle(canvas, millis, &v_screen[0], &v_screen[1], &v_screen[2], brightness);
             }
         }
     }
@@ -672,7 +687,8 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
     Mat4f proj_matrix = matrix_perspective(fov_rad, aspect_ratio, 0.1f, 100.0f);
 
     Mat4f vp_matrix = matrix_multiply(proj_matrix, view_matrix);
-
+    //Vec3f sun_direction = vec3_normalize((Vec3f){0.5f, 0.8f, -0.3f});
+    Vec3f sun_direction = vec3_normalize((Vec3f){0.7f, -0.7f, -0.2f});
     // --- Draw Player ---
     {
         // ADAPTATION: Convert 2D game position to a 3D world position on the XZ plane.
@@ -683,7 +699,7 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
         float player_scale = 0.1f;
 
         draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
-                      player_pos_3d, player_rotation_y, player_scale);
+                      player_pos_3d, player_rotation_y, player_scale, &sun_direction);
     }
 
     // --- Draw Bullets ---
@@ -694,7 +710,7 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
             
             // Bullets are simple; no rotation needed.
             draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
-                          bullet_pos_3d, 0.0f, 0.02f /* scale */);
+                          bullet_pos_3d, 0.0f, 0.04f, &sun_direction);
         }
     }
 
@@ -714,7 +730,7 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
             float scale = state->asteroids[i].size * 0.5f; // Adjust scale factor as needed
 
             draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
-                          asteroid_pos_3d, rotation_y, scale);
+                          asteroid_pos_3d, rotation_y, scale, &sun_direction);
         }
     }
     
@@ -735,7 +751,7 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
         // Let's just draw a standard cube there for now.
         Vec3f laser_pos_3d = { state->laser.x_pos, 0.0f, 0.0f };
         draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
-                          laser_pos_3d, 0.0f, 0.5f); // Simplified representation
+                          laser_pos_3d, 0.0f, 0.5f, &sun_direction); // Simplified representation
     }
     
     // --- Draw UI (HP Bar) ---
