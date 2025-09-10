@@ -97,6 +97,34 @@ static inline Mat4f matrix_rotate_y(float angle_rad) {
 }
 
 /**
+ * @brief Creates a rotation matrix around the X axis.
+ */
+static inline Mat4f matrix_rotate_x(float angle_rad) {
+    Mat4f result = matrix_identity();
+    float c = cosf(angle_rad);
+    float s = sinf(angle_rad);
+    result.m[1][1] = c;
+    result.m[1][2] = -s;
+    result.m[2][1] = s;
+    result.m[2][2] = c;
+    return result;
+}
+
+/**
+ * @brief Creates a rotation matrix around the Z axis.
+ */
+static inline Mat4f matrix_rotate_z(float angle_rad) {
+    Mat4f result = matrix_identity();
+    float c = cosf(angle_rad);
+    float s = sinf(angle_rad);
+    result.m[0][0] = c;
+    result.m[0][1] = -s;
+    result.m[1][0] = s;
+    result.m[1][1] = c;
+    return result;
+}
+
+/**
  * @brief Multiplies two 4x4 matrices (a * b).
  */
 static inline Mat4f matrix_multiply(Mat4f a, Mat4f b) {

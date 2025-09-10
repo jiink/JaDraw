@@ -38,6 +38,8 @@ struct Vector2D{
 };
 struct Player {
     Vector2D pos;
+    float vel;
+    float targetVel;
     float hp;
     float laserChargeTime;
 };
@@ -179,6 +181,8 @@ static void init_game(GameState* state) {
     // Init player
     state->player.pos.x = 0.0f;
     state->player.pos.y = PLAYER_Y_POS;
+    state->player.vel = 0;
+    state->player.targetVel = 0;
     state->player.hp = PLAYER_INITIAL_HP;
     state->player.laserChargeTime = 0.0f;
 
@@ -270,10 +274,13 @@ static void fire_laser(GameState* state) {
     state->laser.power = charge_ratio;
 }
 
-
 static void update_player(GameState* state, float dt, const GameInputData* inputs) {
-    // Movement
-    state->player.pos.x += inputs->stickX * PLAYER_SPEED * dt;
+    // Movement (smooth with acceleration)
+    state->player.targetVel = inputs->stickX * PLAYER_SPEED * dt;
+    // Smoothly interpolate velocity toward targetVel
+    const float SMOOTHING = 0.05f; // Lower = smoother
+    state->player.vel += (state->player.targetVel - state->player.vel) * SMOOTHING;
+    state->player.pos.x += state->player.vel;
 
     // Screen bounds check
     float half_width = PLAYER_WIDTH / 2.0f;
@@ -584,12 +591,17 @@ void fillDitheredTriangle(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis,
 }
 static void draw_3d_model(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis, const Mat4f* vp_matrix,
                           const Vec3f* vertices, const int* indices, int num_indices,
-                          Vec3f position, float rotation_y_rad, float scale,
+                          Vec3f position, float rotation_x_rad, float rotation_y_rad, float rotation_z_rad, float scale,
                           const Vec3f* world_light_dir)
 {
     // 1. Create Model and MVP Matrices (same as before)
     Mat4f scale_mat = matrix_scale((Vec3f){scale, scale, scale});
-    Mat4f rot_mat = matrix_rotate_y(rotation_y_rad);
+    Mat4f rot_mat = matrix_multiply(
+        matrix_multiply( // order matters
+            matrix_rotate_y(rotation_y_rad),
+            matrix_rotate_x(rotation_x_rad)),
+        matrix_rotate_z(rotation_z_rad)
+    );
     Mat4f trans_mat = matrix_translate(position);
     Mat4f model_matrix = matrix_multiply(trans_mat, matrix_multiply(rot_mat, scale_mat));
     Mat4f mvp_matrix = matrix_multiply(*vp_matrix, model_matrix);
@@ -653,6 +665,59 @@ static void draw_3d_model(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis, c
             fillDitheredTriangle(canvas, millis, &v_screen[0], &v_screen[1], &v_screen[2], brightness);
         }
     }
+}
+/**
+ * @brief Draws a point in 3D space with a specified size that respects perspective.
+ *
+ * @param canvas The canvas to draw on.
+ * @param vp_matrix The combined View-Projection matrix.
+ * @param world_position The position of the point in world space.
+ * @param size The desired radius of the point in world space units.
+ */
+static void draw_3d_point(JaDraw<WIDTH, HEIGHT>& canvas, const Mat4f* vp_matrix,
+                          Vec3f world_position, float size)
+{
+    // A point needs a center and an edge to define its size in the world.
+    // We create a second point offset by `size` along the Y-axis.
+    Vec3f center_world = world_position;
+    Vec3f edge_world   = {world_position.x, world_position.y + size, world_position.z};
+
+    // 1. Project the center of the point to find its screen position.
+    Vec2i screen_pos;
+    if (!project_vertex(&center_world, vp_matrix, &screen_pos, WIDTH, HEIGHT)) {
+        // If the center isn't on screen (or is behind the camera), we can't draw it.
+        return;
+    }
+
+    // 2. Project the "edge" point to determine the size in pixels.
+    Vec2i screen_edge;
+    if (!project_vertex(&edge_world, vp_matrix, &screen_edge, WIDTH, HEIGHT)) {
+        // If the edge point is not projectable (e.g. behind camera), we can't
+        // reliably calculate a size, so we can either draw a minimal 1x1 point
+        // or just skip it. Skipping is safer to avoid visual artifacts.
+        // For a small point, it's often fine to just draw a single pixel.
+        //canvas.setPixel(screen_pos.x, screen_pos.y);
+        return;
+    }
+
+    // 3. Calculate the radius in pixels using the distance between the projected points.
+    // We use the distance formula, but since our offset was only on one axis (Y),
+    // we can simplify it. Using the full distance formula would also work and be
+    // more robust if the offset was in a more complex direction.
+    float dx = screen_pos.x - screen_edge.x;
+    float dy = screen_pos.y - screen_edge.y;
+    float screen_radius = sqrtf(dx * dx + dy * dy);
+
+    // 4. Calculate the final width/height of the rectangle (diameter).
+    // We ensure it's at least 1 pixel wide so it doesn't disappear when very far away.
+    int w = (int)(screen_radius * 2.0f);
+    if (w < 1) {
+        w = 1;
+    }
+
+    // 5. Draw the filled rectangle centered on the projected point's position.
+    // The `true` likely corresponds to the color/fill state.
+    draw_filled_rect(canvas, screen_pos.x - (w / 2), screen_pos.y - (w / 2), w, w, true);
 }
 
 // Helper to convert world coordinates [-1, 1] to screen pixels [0, Res-1]
@@ -727,9 +792,9 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
         // The player ship can remain unrotated for a clean look.
         float player_rotation_y = 3.1f; 
         float player_scale = 0.25f;
-
+        float tilt = state->player.vel * -35.0f;
         draw_3d_model(canvas, millis, &vp_matrix, SHIP_VERTICES, SHIP_INDICES, SHIP_NUM_INDICES,
-                      player_pos_3d, player_rotation_y, player_scale, &sun_direction);
+                      player_pos_3d, 0, player_rotation_y, tilt, player_scale, &sun_direction);
     }
 
     // --- Draw Bullets ---
@@ -739,8 +804,9 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
             Vec3f bullet_pos_3d = {state->bullets[i].pos.x, 0.0f, state->bullets[i].pos.y};
             
             // Bullets are simple; no rotation needed.
-            draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
-                          bullet_pos_3d, 0.0f, 0.04f, &sun_direction);
+            // draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
+            //               bullet_pos_3d, 0, 0.0f, 0, 0.04f, &sun_direction);
+            draw_3d_point(canvas, &vp_matrix, bullet_pos_3d, 0.03f);
         }
     }
 
@@ -757,10 +823,10 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
             float rotation_y = (time_sec * 1.2f) + (i * 0.77f);
             
             // Use the asteroid's 2D size directly for 3D scaling.
-            float scale = state->asteroids[i].size * 0.5f; // Adjust scale factor as needed
+            float scale = state->asteroids[i].size * 1.0f; // Adjust scale factor as needed
 
             draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
-                          asteroid_pos_3d, rotation_y, scale, &sun_direction);
+                          asteroid_pos_3d, rotation_y, rotation_y, 0, scale, &sun_direction);
         }
     }
     
@@ -781,12 +847,12 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
         // Let's just draw a standard cube there for now.
         Vec3f laser_pos_3d = { state->laser.x_pos, 0.0f, 0.0f };
         draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
-                          laser_pos_3d, 0.0f, 0.5f, &sun_direction); // Simplified representation
+                          laser_pos_3d, 0, 0.0f, 0, 0.5f, &sun_direction); // Simplified representation
     }
     
     // --- Draw UI (HP Bar) ---
     // The UI is pure 2D screen space and is unaffected by the 3D world.
     // We use the helper that draws a rect from two triangles.
     uint8_t hp_bar_width = (uint8_t)((state->player.hp / PLAYER_INITIAL_HP) * (WIDTH - 4));
-    draw_filled_rect(canvas, 2, HEIGHT - 5, hp_bar_width, 3, true);
+    draw_filled_rect(canvas, 2, HEIGHT - 1, hp_bar_width, 1, true);
 }
