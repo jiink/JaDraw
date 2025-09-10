@@ -582,28 +582,20 @@ void fillDitheredTriangle(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis,
         }
     }
 }
-
-/**
- * @brief Draws a 3D model with directional lighting.
- *
- * @param ... (previous params)
- * @param world_light_dir A normalized vector pointing TOWARDS the light source.
- */
 static void draw_3d_model(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis, const Mat4f* vp_matrix,
                           const Vec3f* vertices, const int* indices, int num_indices,
                           Vec3f position, float rotation_y_rad, float scale,
                           const Vec3f* world_light_dir)
 {
-    // 1. Create Model and MVP Matrices
+    // 1. Create Model and MVP Matrices (same as before)
     Mat4f scale_mat = matrix_scale((Vec3f){scale, scale, scale});
     Mat4f rot_mat = matrix_rotate_y(rotation_y_rad);
     Mat4f trans_mat = matrix_translate(position);
-    // Model matrix transforms from local model space to world space
     Mat4f model_matrix = matrix_multiply(trans_mat, matrix_multiply(rot_mat, scale_mat));
     Mat4f mvp_matrix = matrix_multiply(*vp_matrix, model_matrix);
 
-    const float AMBIENT_LIGHT = 0.0f; // Base brightness for unlit areas
-    const float DIFFUSE_STRENGTH = 1.0f; // How strong the sun is
+    const float AMBIENT_LIGHT = 0.0f;
+    const float DIFFUSE_STRENGTH = 1.5f;
 
     // 2. Process and draw each triangle
     for (int i = 0; i < num_indices; i += 3) {
@@ -612,49 +604,53 @@ static void draw_3d_model(JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis, c
         v_model[1] = &vertices[indices[i+1]];
         v_model[2] = &vertices[indices[i+2]];
 
-        // --- Lighting Calculation (in World Space) ---
-        // a. Transform triangle vertices to world space to calculate the normal
-        Vec3f v_world[3];
-        v_world[0] = transform_vertex(v_model[0], &model_matrix);
-        v_world[1] = transform_vertex(v_model[1], &model_matrix);
-        v_world[2] = transform_vertex(v_model[2], &model_matrix);
-
-        // b. Calculate face normal
-        Vec3f edge1 = vec3_subtract(v_world[1], v_world[0]);
-        Vec3f edge2 = vec3_subtract(v_world[2], v_world[0]);
-        Vec3f face_normal = vec3_normalize(vec3_cross(edge1, edge2));
-
-        // c. Calculate diffuse light intensity using the dot product
-        float diffuse_intensity = vec3_dot(face_normal, *world_light_dir);
-
-        // --- Projection and Drawing ---
-        // Project the original model-space vertices to the screen
+        // --- Projection ---
+        // Project all three vertices first.
         Vec2i v_screen[3];
-        bool on_screen = true;
-        for (int j = 0; j < 3; ++j) {
-            if (!project_vertex(v_model[j], &mvp_matrix, &v_screen[j], WIDTH, HEIGHT)) {
-                on_screen = false;
-                break;
-            }
+        bool p1_visible = project_vertex(v_model[0], &mvp_matrix, &v_screen[0], WIDTH, HEIGHT);
+        bool p2_visible = project_vertex(v_model[1], &mvp_matrix, &v_screen[1], WIDTH, HEIGHT);
+        bool p3_visible = project_vertex(v_model[2], &mvp_matrix, &v_screen[2], WIDTH, HEIGHT);
+
+        // If all three vertices are behind the camera, skip the whole triangle.
+        // This is a simple but effective form of clipping.
+        if (!p1_visible && !p2_visible && !p3_visible) {
+            continue;
         }
-        
-        if (on_screen) {
-            // Use screen-space winding order for back-face culling (it's fast and effective)
-            int cross_product_z = (v_screen[1].x - v_screen[0].x) * (v_screen[2].y - v_screen[0].y) -
-                                  (v_screen[1].y - v_screen[0].y) * (v_screen[2].x - v_screen[0].x);
+        // A more robust check would be if ANY vertex is valid, but this is often good enough.
+        // if (!p1_visible && !p2_visible && !p3_visible) continue;
+        // Or even better, if all are invalid
+        // if (!(p1_visible || p2_visible || p3_visible)) continue;
 
-            if (cross_product_z < 0) { // If triangle is facing the camera
-                // Final brightness is a combination of ambient and diffuse light
-                float brightness = AMBIENT_LIGHT;
-                if (diffuse_intensity > 0) { // Only add light if the face is lit
-                    brightness += diffuse_intensity * DIFFUSE_STRENGTH;
-                }
 
-                // Clamp brightness to a max of 1.0
-                if (brightness > 1.0f) brightness = 1.0f;
+        // --- Back-face Culling ---
+        // Use screen-space winding order. This is fast and effective.
+        int cross_product_z = (v_screen[1].x - v_screen[0].x) * (v_screen[2].y - v_screen[0].y) -
+                              (v_screen[1].y - v_screen[0].y) * (v_screen[2].x - v_screen[0].x);
 
-                fillDitheredTriangle(canvas, millis, &v_screen[0], &v_screen[1], &v_screen[2], brightness);
+        if (cross_product_z < 0) { // If triangle is facing the camera
+            // --- Lighting Calculation (in World Space) ---
+            // We do this *after* culling, because it's wasted computation on a triangle we won't draw.
+            Vec3f v_world[3];
+            v_world[0] = transform_vertex(v_model[0], &model_matrix);
+            v_world[1] = transform_vertex(v_model[1], &model_matrix);
+            v_world[2] = transform_vertex(v_model[2], &model_matrix);
+
+            Vec3f edge1 = vec3_subtract(v_world[1], v_world[0]);
+            Vec3f edge2 = vec3_subtract(v_world[2], v_world[0]);
+            Vec3f face_normal = vec3_normalize(vec3_cross(edge1, edge2));
+
+            float diffuse_intensity = vec3_dot(face_normal, *world_light_dir);
+
+            // Final brightness calculation
+            float brightness = AMBIENT_LIGHT;
+            if (diffuse_intensity > 0) {
+                brightness += diffuse_intensity * DIFFUSE_STRENGTH;
             }
+            if (brightness > 1.0f) brightness = 1.0f;
+
+            // --- Drawing ---
+            // The rasterizer will handle clipping the triangle to the screen bounds.
+            fillDitheredTriangle(canvas, millis, &v_screen[0], &v_screen[1], &v_screen[2], brightness);
         }
     }
 }
@@ -672,8 +668,8 @@ static void draw_filled_rect(JaDraw<WIDTH, HEIGHT>& canvas, uint8_t x, uint8_t y
     if (x >= WIDTH || y >= HEIGHT) return;
     uint8_t max_w = (x + w > WIDTH) ? (WIDTH - x) : w;
     uint8_t max_h = (y + h > HEIGHT) ? (HEIGHT - y) : h;
-    for (uint8_t i = x; i < x + max_w; ++i) {
-        for (uint8_t j = y; j < y + max_h; ++j) {
+    for (uint8_t i = x; i < (uint8_t)(x + max_w); ++i) {
+        for (uint8_t j = y; j < (uint8_t)(y + max_h); ++j) {
             drawPixel(canvas, i, j, white);
         }
     }
@@ -711,7 +707,7 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
     }
 
     // --- Setup Camera and Projection (once per frame) ---
-    Vec3f camera_pos = {0.0f, -0.5f, -1.5f};
+    Vec3f camera_pos = {0.0f, -0.20f, -1.3f};
     Vec3f camera_target = {0.0f, 0.0f, 0.0f};
     Vec3f up_vector = {0.0f, -1.0f, 0.0f};
     Mat4f view_matrix = matrix_look_at(camera_pos, camera_target, up_vector);
@@ -730,7 +726,7 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
         
         // The player ship can remain unrotated for a clean look.
         float player_rotation_y = 3.1f; 
-        float player_scale = 0.2f;
+        float player_scale = 0.25f;
 
         draw_3d_model(canvas, millis, &vp_matrix, SHIP_VERTICES, SHIP_INDICES, SHIP_NUM_INDICES,
                       player_pos_3d, player_rotation_y, player_scale, &sun_direction);

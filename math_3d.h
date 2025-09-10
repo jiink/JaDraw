@@ -158,55 +158,36 @@ static inline Mat4f matrix_look_at(Vec3f eye, Vec3f center, Vec3f up) {
     
     return result;
 }
-
 /**
- * @brief Transforms a 3D vertex by an MVP matrix, performs perspective division,
- * and maps it to 2D screen coordinates.
- * 
- * This function simulates the vertex processing stage of a standard graphics pipeline.
- * Assumes that WIDTH and HEIGHT macros are defined for the screen dimensions.
+ * @brief Transforms a 3D vertex, performs perspective division, and maps to screen coordinates.
  *
- * @param model_vertex Pointer to the 3D vertex in its local model space.
- * @param mvp          Pointer to the combined Model-View-Projection matrix.
- * @param out_screen_pos Pointer to a Vec2i struct to store the final screen coordinates.
- * @return             true if the vertex is within the viewing frustum (visible), false otherwise.
+ * This version no longer culls vertices outside the L/R/T/B planes, allowing for
+ * triangles to be partially off-screen. It only rejects vertices behind the camera.
  */
-static inline bool project_vertex(const Vec3f* model_vertex, const Mat4f* mvp, Vec2i* out_screen_pos, int screen_w, int screen_h) {
-    // We assume WIDTH and HEIGHT are available, as they were in the original prompt.
-    // e.g. #define WIDTH 128
-    //      #define HEIGHT 64
-
-    // 1. Apply the MVP matrix to the vertex (Model -> World -> View -> Clip Space)
-    // We treat the input as a 4D vector (x, y, z, 1) for the matrix multiplication.
+static inline bool project_vertex(const Vec3f* model_vertex, const Mat4f* mvp, Vec2i* out_screen_pos, int screen_w, int screen_h)
+{
+    // 1. Apply the MVP matrix to the vertex
     float clip_x = model_vertex->x * mvp->m[0][0] + model_vertex->y * mvp->m[0][1] + model_vertex->z * mvp->m[0][2] + 1.0f * mvp->m[0][3];
     float clip_y = model_vertex->x * mvp->m[1][0] + model_vertex->y * mvp->m[1][1] + model_vertex->z * mvp->m[1][2] + 1.0f * mvp->m[1][3];
-    // float clip_z = model_vertex->x * mvp->m[2][0] + model_vertex->y * mvp->m[2][1] + model_vertex->z * mvp->m[2][2] + 1.0f * mvp->m[2][3];
     float clip_w = model_vertex->x * mvp->m[3][0] + model_vertex->y * mvp->m[3][1] + model_vertex->z * mvp->m[3][2] + 1.0f * mvp->m[3][3];
 
-    // 2. Perform basic clipping.
-    // If w is near zero or negative, the point is behind or on the camera plane.
-    // This simple check prevents division by zero and incorrect projections.
-    if (clip_w < 0.1f) { // 0.1f is a typical near-plane value
+    // 2. Perform Near-Plane Clipping.
+    // This is the most important check. If a vertex is behind the camera (w < 0),
+    // the perspective division will flip coordinates and cause massive visual errors.
+    // Rejecting the whole triangle is a simple and effective way to handle this.
+    // A small epsilon (0.001f) prevents division by zero.
+    if (clip_w < 0.001f) {
         return false;
     }
 
-    // 3. Perspective Division (Clip Space -> Normalized Device Coordinates, NDC)
-    // This transforms the viewing frustum into a cube from [-1, 1] on all axes.
+    // 3. Perspective Division (Clip Space -> NDC)
     float ndc_x = clip_x / clip_w;
     float ndc_y = clip_y / clip_w;
-    // float ndc_z = clip_z / clip_w; // Z is not needed for 2D screen mapping
 
-    // 4. Simple frustum culling (check if outside the NDC cube).
-    // A full clipping implementation is complex; for now, we just reject vertices
-    // that are clearly off-screen.
-    if (ndc_x < -1.0f || ndc_x > 1.0f || ndc_y < -1.0f || ndc_y > 1.0f) {
-        return false;
-    }
-
-    // 5. Viewport Transform (NDC -> Screen Coordinates)
-    // Maps the [-1, 1] NDC range to the [0, WIDTH] and [0, HEIGHT] screen range.
+    // 4. Viewport Transform (NDC -> Screen Coordinates)
+    // We REMOVED the culling check here. The coordinates are calculated even if they
+    // are outside the [-1, 1] NDC range.
     out_screen_pos->x = (int)((ndc_x + 1.0f) * 0.5f * screen_w);
-    // Y is flipped because NDC +1 is 'up', but screen coordinate 0 is at the top.
     out_screen_pos->y = (int)((1.0f - ndc_y) * 0.5f * screen_h);
 
     return true;
