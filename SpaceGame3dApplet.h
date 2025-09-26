@@ -18,7 +18,7 @@
 #define BULLET_HEIGHT 0.05f
 #define BULLET_DAMAGE 10.0f
 #define LASER_CHARGE_TIME_FOR_BULLET 1.0f
-#define LASER_MAX_CHARGE_TIME 4.0f
+#define LASER_MAX_CHARGE_TIME 2.5f
 #define LASER_WIDTH 0.04f
 #define LASER_DURATION 0.65f
 #define LASER_BASE_DAMAGE 200.0f
@@ -289,11 +289,12 @@ static void update_player(GameState* state, float dt, const GameInputData* input
 
     // Screen bounds check
     float half_width = PLAYER_WIDTH / 2.0f;
-    if (state->player.pos.x < -1.0f + half_width) {
-        state->player.pos.x = -1.0f + half_width;
+    const float bounds = 0.6f;
+    if (state->player.pos.x < -bounds + half_width) {
+        state->player.pos.x = -bounds + half_width;
     }
-    if (state->player.pos.x > 1.0f - half_width) {
-        state->player.pos.x = 1.0f - half_width;
+    if (state->player.pos.x > bounds - half_width) {
+        state->player.pos.x = bounds - half_width;
     }
 
     // Firing logic
@@ -356,7 +357,7 @@ static void handle_spawning(GameState* state, float dt) {
         for (int i = 0; i < MAX_ASTEROIDS; ++i) {
             if (!state->asteroids[i].active) {
                 state->asteroids[i].active = true;
-                state->asteroids[i].pos.x = rand_float(-0.8f, 0.8f);
+                state->asteroids[i].pos.x = rand_float(-0.5f, 0.5f);
                 state->asteroids[i].pos.y = 5.1f; // Spawn just above the screen
                 state->asteroids[i].vel.x = rand_float(-0.1f, 0.1f);
                 state->asteroids[i].vel.y = -rand_float(ASTEROID_MIN_SPEED, ASTEROID_MAX_SPEED);
@@ -794,7 +795,9 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
         Vec3f player_pos_3d = {state->player.pos.x, 0.0f, state->player.pos.y};
         if (state->player.laserChargeTime > LASER_CHARGE_TIME_FOR_BULLET) {
              // show pulsing 
-             float pulseSize = 0.05f + 0.02f * cos(millis * 0.05f);
+             float charge_ratio = state->player.laserChargeTime / LASER_MAX_CHARGE_TIME;
+             if (charge_ratio > 1.0f) { charge_ratio = 1.0f; }
+             float pulseSize = 0.06f * charge_ratio + 0.02f * cos(millis * 0.05f);
              Vec3f pulsePos = {player_pos_3d.x, player_pos_3d.y, player_pos_3d.z + 0.2f};
              draw_3d_point(canvas, &vp_matrix, pulsePos, pulseSize);
         }   
@@ -844,10 +847,13 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
         //Vec3f laser_pos_3d = { state->laser.x_pos, 0.0f, 0.0f };
         // draw_3d_model(canvas, millis, &vp_matrix, QUAD_VERTICES, QUAD_INDICES, QUAD_NUM_INDICES,
         //                   laser_pos_3d, 0, 0.0f, 0, 0.5f, &sun_direction);
+        // goes from 1.0 to 0.0 as the laser nears dissapearing time
+        float laserLifetimeProportion = state->laser.duration / LASER_DURATION;
         for (int i = 0; i < 15; i++)
         {
             Vec3f laser_pos_3d = { state->laser.x_pos, 0.0f, i * 0.2f - (0.6f + 0.2f * cos(millis * 0.07f)) };
-            draw_3d_point(canvas, &vp_matrix, laser_pos_3d, 0.05f);
+            float laserBaseSize = state->laser.power * 0.11f;
+            draw_3d_point(canvas, &vp_matrix, laser_pos_3d, laserBaseSize * laserLifetimeProportion);
         }
     }
     
