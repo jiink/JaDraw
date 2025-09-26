@@ -56,6 +56,7 @@ struct Asteroid {
     Vector2D vel;
     float size;
     float hp;
+    int flashTimerMs;
 };
 
 struct Laser {
@@ -318,7 +319,7 @@ static void update_bullets(GameState* state, float dt) {
         if (state->bullets[i].active) {
             state->bullets[i].pos.y += state->bullets[i].vel.y * dt;
             // Deactivate if it goes off-screen
-            if (state->bullets[i].pos.y > 1.1f) {
+            if (state->bullets[i].pos.y > 3.0f) {
                 state->bullets[i].active = false;
             }
         }
@@ -333,6 +334,11 @@ static void update_asteroids(GameState* state, float dt) {
             // Deactivate if it goes off-screen
             if (state->asteroids[i].pos.y < -1.1f) {
                 state->asteroids[i].active = false;
+            }
+            state->asteroids[i].flashTimerMs -= (int)(dt * 1000);
+            if (state->asteroids[i].flashTimerMs < 0)
+            {
+                state->asteroids[i].flashTimerMs = 0;
             }
         }
     }
@@ -360,6 +366,11 @@ static void handle_spawning(GameState* state, float dt) {
                 state->asteroids[i].pos.x = rand_float(-0.5f, 0.5f);
                 state->asteroids[i].pos.y = 5.1f; // Spawn just above the screen
                 state->asteroids[i].vel.x = rand_float(-0.1f, 0.1f);
+                if ((state->asteroids[i].pos.x < 0 && state->asteroids[i].vel.x < 0) ||
+                    state->asteroids[i].pos.x > 0 && state->asteroids[i].vel.x > 0)
+                {
+                    state->asteroids[i].vel.x *= -1.0f;
+                }
                 state->asteroids[i].vel.y = -rand_float(ASTEROID_MIN_SPEED, ASTEROID_MAX_SPEED);
                 state->asteroids[i].size = rand_float(ASTEROID_MIN_SIZE, ASTEROID_MAX_SIZE);
                 state->asteroids[i].hp = state->asteroids[i].size * 150.0f; // Bigger asteroids have more HP
@@ -386,6 +397,7 @@ static void handle_collisions(GameState* state) {
                 fabsf(state->bullets[b].pos.y - state->asteroids[a].pos.y) < (b_half_h + a_half_s))
             {
                 state->asteroids[a].hp -= BULLET_DAMAGE;
+                state->asteroids[a].flashTimerMs = 150;
                 state->bullets[b].active = false; // Bullet is used up
                 if (state->asteroids[a].hp <= 0) {
                     state->asteroids[a].active = false;
@@ -836,17 +848,15 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
             
             // Use the asteroid's 2D size directly for 3D scaling.
             float scale = state->asteroids[i].size * 1.0f; // Adjust scale factor as needed
-
+            Vec3f flash_dir = vec3_normalize((Vec3f){0.0f, 0.0f, -1.0f});
+            Vec3f* light_dir = state->asteroids[i].flashTimerMs > 0 ? &flash_dir : &sun_direction;
             draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
-                          asteroid_pos_3d, rotation_y, rotation_y, 0, scale, &sun_direction);
+                          asteroid_pos_3d, rotation_y, rotation_y, 0, scale, light_dir);
         }
     }
     
     // --- Draw Laser ---
     if (state->laser.active) {
-        //Vec3f laser_pos_3d = { state->laser.x_pos, 0.0f, 0.0f };
-        // draw_3d_model(canvas, millis, &vp_matrix, QUAD_VERTICES, QUAD_INDICES, QUAD_NUM_INDICES,
-        //                   laser_pos_3d, 0, 0.0f, 0, 0.5f, &sun_direction);
         // goes from 1.0 to 0.0 as the laser nears dissapearing time
         float laserLifetimeProportion = state->laser.duration / LASER_DURATION;
         for (int i = 0; i < 15; i++)
