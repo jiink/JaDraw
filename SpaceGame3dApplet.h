@@ -20,8 +20,8 @@
 #define LASER_CHARGE_TIME_FOR_BULLET 1.0f
 #define LASER_MAX_CHARGE_TIME 4.0f
 #define LASER_WIDTH 0.04f
-#define LASER_DURATION 0.35f
-#define LASER_BASE_DAMAGE 100.0f
+#define LASER_DURATION 0.65f
+#define LASER_BASE_DAMAGE 200.0f
 
 #define ASTEROID_SPAWN_INTERVAL 4.5f
 #define ASTEROID_MIN_SPEED 0.2f
@@ -81,15 +81,12 @@ struct GameInputData {
     float stickX; // -1.0 (left) to 1.0 (right)
 };
 
-// --- A Simple Cube Model (centered at origin, 1x1x1) ---
 const Vec3f CUBE_VERTICES[] = {
     {-0.5f, -0.5f, -0.5f}, { 0.5f, -0.5f, -0.5f},
     { 0.5f,  0.5f, -0.5f}, {-0.5f,  0.5f, -0.5f},
     {-0.5f, -0.5f,  0.5f}, { 0.5f, -0.5f,  0.5f},
     { 0.5f,  0.5f,  0.5f}, {-0.5f,  0.5f,  0.5f}
 };
-
-// 12 triangles, 3 indices per triangle
 const int CUBE_INDICES[] = {
     0, 2, 1, 0, 3, 2, // Back face
     1, 6, 5, 1, 2, 6, // Right face
@@ -100,6 +97,14 @@ const int CUBE_INDICES[] = {
 };
 const int CUBE_NUM_INDICES = 36;
 
+const Vec3f QUAD_VERTICES[] = {
+    {-0.5f, 0.0f, -0.5f}, { 0.5f, 0.0f, -0.5f},
+    {-0.5f, 0.0f,  5.5f}, { 0.5f, 0.0f,  5.5f},
+};
+const int QUAD_INDICES[] = {
+    2, 1, 3, 2, 0, 1
+};
+const int QUAD_NUM_INDICES = 6;
 
 // --- A simple, Star Fox-style Spaceship Model ---
 // Centered at the origin, pointing forward along the -Z axis.
@@ -786,12 +791,13 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
     Vec3f sun_direction = vec3_normalize((Vec3f){0.7f, -0.7f, -0.2f});
     // --- Draw Player ---
     {
+        Vec3f player_pos_3d = {state->player.pos.x, 0.0f, state->player.pos.y};
         if (state->player.laserChargeTime > LASER_CHARGE_TIME_FOR_BULLET) {
              // show pulsing 
-        }
-        // ADAPTATION: Convert 2D game position to a 3D world position on the XZ plane.
-        Vec3f player_pos_3d = {state->player.pos.x, 0.0f, state->player.pos.y};
-        
+             float pulseSize = 0.05f + 0.02f * cos(millis * 0.05f);
+             Vec3f pulsePos = {player_pos_3d.x, player_pos_3d.y, player_pos_3d.z + 0.2f};
+             draw_3d_point(canvas, &vp_matrix, pulsePos, pulseSize);
+        }   
         // The player ship can remain unrotated for a clean look.
         float player_rotation_y = 3.1f; 
         float player_scale = 0.25f;
@@ -835,22 +841,14 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
     
     // --- Draw Laser ---
     if (state->laser.active) {
-        // The laser is a special case: a tall, thin wall.
-        // We build its model matrix manually for non-uniform scaling.
-        Mat4f scale_mat = matrix_scale((Vec3f){0.02f, 2.0f, 2.0f}); // Thin in X, tall in Y/Z
-        Mat4f trans_mat = matrix_translate((Vec3f){state->laser.x_pos, 0.0f, 0.0f});
-        Mat4f model_matrix = matrix_multiply(trans_mat, scale_mat);
-
-        // Create the final MVP matrix just for this object.
-        Mat4f laser_mvp = matrix_multiply(vp_matrix, model_matrix);
-
-        // This would require a modification to draw_3d_model or drawing it manually here.
-        // For simplicity, we can reuse draw_3d_model by just passing in a pre-made MVP.
-        // (This would be an extension to the helper, but the concept stands).
-        // Let's just draw a standard cube there for now.
-        Vec3f laser_pos_3d = { state->laser.x_pos, 0.0f, 0.0f };
-        draw_3d_model(canvas, millis, &vp_matrix, CUBE_VERTICES, CUBE_INDICES, CUBE_NUM_INDICES,
-                          laser_pos_3d, 0, 0.0f, 0, 0.5f, &sun_direction); // Simplified representation
+        //Vec3f laser_pos_3d = { state->laser.x_pos, 0.0f, 0.0f };
+        // draw_3d_model(canvas, millis, &vp_matrix, QUAD_VERTICES, QUAD_INDICES, QUAD_NUM_INDICES,
+        //                   laser_pos_3d, 0, 0.0f, 0, 0.5f, &sun_direction);
+        for (int i = 0; i < 15; i++)
+        {
+            Vec3f laser_pos_3d = { state->laser.x_pos, 0.0f, i * 0.2f - (0.6f + 0.2f * cos(millis * 0.07f)) };
+            draw_3d_point(canvas, &vp_matrix, laser_pos_3d, 0.05f);
+        }
     }
     
     // --- Draw UI (HP Bar) ---
