@@ -7,8 +7,8 @@
 #define MAX_SEGMENTS 100
 #define WORLD_MAX_X (2.0f)
 #define WORLD_MAX_Y (1.0f)
-#define SEGMENT_SPACING (0.2f)
-
+// The spacing is now determined by speed and framerate, so this define is no longer needed for movement.
+// #define SEGMENT_SPACING (0.08f) 
 
 typedef struct {
     Vec2 pos;
@@ -41,18 +41,18 @@ static unsigned int player_get_num_segments(Player* p)
 static void player_add_segment(Player* p)
 {
     unsigned int count = player_get_num_segments(p);
-    if (count < 0) { count = 1; }
-    if (count < MAX_SEGMENTS - 1)
+    if (count < MAX_SEGMENTS)
     {
-        p->segments[count].active = 1;
-        p->segments[count].pos.x = p->segments[count-1].pos.x;
-        p->segments[count].pos.y = p->segments[count-1].pos.y;
+        p->segments[count].active = true;
+        if (count > 0) {
+            p->segments[count].pos = p->segments[count - 1].pos;
+        }
     }
 }
 
 static void init_game(GameState* state)
 {
-    state->player.speed = 0.25f;
+    state->player.speed = 1.0f;
     state->player.directionRad = 0.0f;
     for (int i = 0; i < MAX_SEGMENTS; i++)
     {
@@ -65,25 +65,38 @@ static void init_game(GameState* state)
     state->player.segments[0].pos.x = 0.0f;
     state->player.segments[0].pos.y = 0.0f;
     state->player.segments[0].radius = 1.0f;
+
     player_add_segment(&(state->player));
     player_add_segment(&(state->player));
     player_add_segment(&(state->player));
+
+    // Initial spacing is still useful for the start of the game
+    float initial_spacing = 0.08f;
     unsigned int numSegments = player_get_num_segments(&state->player);
     for (unsigned int i = 1; i < numSegments; i++) {
-        state->player.segments[i].pos.x = state->player.segments[i-1].pos.x - SEGMENT_SPACING;
+        state->player.segments[i].pos.x = state->player.segments[i-1].pos.x - initial_spacing;
         state->player.segments[i].pos.y = state->player.segments[i-1].pos.y;
     }
 }
 
 
-
+// FIXED: Replaced update logic with the classic "shift the body" algorithm.
 static void update_player(GameState* state, float dt, int inputDir)
 {
     Player* player = &(state->player);
     Segment* head = &(player->segments[0]);
+    unsigned int numSegments = player_get_num_segments(player);
 
-    // Steer left/right like a snake
-    const float turnSpeed = 2.5f; // radians per second
+    // Part 1: Shift the entire body FIRST.
+    // Each segment moves into the previous position of the segment in front of it.
+    // This must be done in a reverse loop, from tail to head.
+    for (unsigned int i = numSegments - 1; i > 0; i--)
+    {
+        player->segments[i].pos = player->segments[i - 1].pos;
+    }
+
+    // Part 2: Now, steer and move the head to its new position.
+    const float turnSpeed = 2.5f;
 
     if (inputDir == 1) {
         player->directionRad += turnSpeed * dt;
@@ -91,56 +104,33 @@ static void update_player(GameState* state, float dt, int inputDir)
         player->directionRad -= turnSpeed * dt;
     }
 
-    // Move head using speed and dt
-    float dx = cosf(player->directionRad) * player->speed * dt;
-    float dy = sinf(player->directionRad) * player->speed * dt;
-    head->pos.x += dx;
-    head->pos.y += dy;
+    head->pos.x += cosf(player->directionRad) * player->speed * dt;
+    head->pos.y += sinf(player->directionRad) * player->speed * dt;
 
+    // World boundary wrapping (this is now safe to do)
     if (head->pos.x > WORLD_MAX_X)  head->pos.x = -WORLD_MAX_X;
     if (head->pos.x < -WORLD_MAX_X) head->pos.x = WORLD_MAX_X;
     if (head->pos.y > WORLD_MAX_Y)  head->pos.y = -WORLD_MAX_Y;
     if (head->pos.y < -WORLD_MAX_Y) head->pos.y = WORLD_MAX_Y;
-
-    unsigned int numSegments = player_get_num_segments(player);
-     for (unsigned int i = 1; i < numSegments; i++)
-    {
-        Vec2* prev = &player->segments[i - 1].pos; // The segment in front
-        Vec2* curr = &player->segments[i].pos;   // The current segment
-
-        // Get the vector from current segment to the previous one
-        float dx = prev->x - curr->x;
-        float dy = prev->y - curr->y;
-        float dist = sqrtf(dx * dx + dy * dy);
-
-        // If the segment is further from its parent than the allowed spacing, move it closer.
-        if (dist > SEGMENT_SPACING)
-        {
-            // Calculate how much it needs to move to close the gap
-            float moveAmount = dist - SEGMENT_SPACING;
-
-            // Move the current segment towards the previous one by that amount
-            curr->x += (dx / dist) * moveAmount;
-            curr->y += (dy / dist) * moveAmount;
-        }
-    }
 }
+
 
 static void draw_game(GameState* state, JaDraw<WIDTH, HEIGHT>& canvas)
 {
     canvas.clear(0);
+    unsigned int numSegments = player_get_num_segments(&state->player);
 
-    // Map world coordinates: x in [-2,2], y in [-1,1]
-    for (int i = 0; i < MAX_SEGMENTS; i++) {
+    for (unsigned int i = 0; i < numSegments; i++) {
         const Segment* seg = &state->player.segments[i];
-        if (!seg->active) break;
-        // Map x from [-2,2] to [0, WIDTH-1]
-        int px = (int)(((seg->pos.x + 2.0f) * 0.25f) * (WIDTH - 1));
-        // Map y from [-1,1] to [0, HEIGHT-1]
-        int py = (int)(((seg->pos.y + 1.0f) * 0.5f) * (HEIGHT - 1));
-        int pr = (int)(seg->radius * 0.25f * (WIDTH + HEIGHT) * 0.25f);
-        if (pr <= 0) pr = 1;
-        canvas.drawPixel(px, py, Colors::White);
+        
+        int px = (int)(((seg->pos.x + WORLD_MAX_X) / (2.0f * WORLD_MAX_X)) * (WIDTH - 1));
+        int py = (int)(((seg->pos.y + WORLD_MAX_Y) / (2.0f * WORLD_MAX_Y)) * (HEIGHT - 1));
+        
+        if (i == 0) {
+            canvas.drawPixel(px, py, Colors::Green); // Head
+        } else {
+            canvas.drawPixel(px, py, Colors::White); // Body
+        }
     }
 }
 
@@ -152,7 +142,7 @@ public:
     void loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputData& inputs) override;
     const char* getName() const override;
 };
-SnakeGameApplet::SnakeGameApplet() {} 
+SnakeGameApplet::SnakeGameApplet() {}
 void SnakeGameApplet::setup() {}
 
 void SnakeGameApplet::loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputData& inputs)
@@ -165,8 +155,8 @@ void SnakeGameApplet::loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputD
         initialized = true;
     }
     int inputDir = 0;
-    if (inputs.rotation > 0) { inputDir = 1; } 
-    else if (inputs.rotation < 0) { inputDir = -1; }
+    if (inputs.rotation > 0.1) { inputDir = 1; }
+    else if (inputs.rotation < -0.1) { inputDir = -1; }
 
     update_player(&state, dt, inputDir);
 

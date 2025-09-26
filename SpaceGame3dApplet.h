@@ -17,17 +17,17 @@
 #define BULLET_WIDTH 0.03f
 #define BULLET_HEIGHT 0.05f
 #define BULLET_DAMAGE 10.0f
-#define LASER_CHARGE_TIME_FOR_BULLET 0.5f
-#define LASER_MAX_CHARGE_TIME 2.0f
+#define LASER_CHARGE_TIME_FOR_BULLET 1.0f
+#define LASER_MAX_CHARGE_TIME 4.0f
 #define LASER_WIDTH 0.04f
-#define LASER_DURATION 0.85f
-#define LASER_BASE_DAMAGE 50.0f
+#define LASER_DURATION 0.35f
+#define LASER_BASE_DAMAGE 100.0f
 
-#define ASTEROID_SPAWN_INTERVAL 1.5f
+#define ASTEROID_SPAWN_INTERVAL 4.5f
 #define ASTEROID_MIN_SPEED 0.2f
 #define ASTEROID_MAX_SPEED 0.6f
-#define ASTEROID_MIN_SIZE 0.08f
-#define ASTEROID_MAX_SIZE 0.2f
+#define ASTEROID_MIN_SIZE 0.2f
+#define ASTEROID_MAX_SIZE 0.5f
 
 //struct Vec2i { int x, y; };
 //struct Vec3f { float x, y, z; };
@@ -351,8 +351,8 @@ static void handle_spawning(GameState* state, float dt) {
         for (int i = 0; i < MAX_ASTEROIDS; ++i) {
             if (!state->asteroids[i].active) {
                 state->asteroids[i].active = true;
-                state->asteroids[i].pos.x = rand_float(-1.0f, 1.0f);
-                state->asteroids[i].pos.y = 1.1f; // Spawn just above the screen
+                state->asteroids[i].pos.x = rand_float(-0.8f, 0.8f);
+                state->asteroids[i].pos.y = 5.1f; // Spawn just above the screen
                 state->asteroids[i].vel.x = rand_float(-0.1f, 0.1f);
                 state->asteroids[i].vel.y = -rand_float(ASTEROID_MIN_SPEED, ASTEROID_MAX_SPEED);
                 state->asteroids[i].size = rand_float(ASTEROID_MIN_SIZE, ASTEROID_MAX_SIZE);
@@ -786,6 +786,9 @@ static void draw_game_3d(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, 
     Vec3f sun_direction = vec3_normalize((Vec3f){0.7f, -0.7f, -0.2f});
     // --- Draw Player ---
     {
+        if (state->player.laserChargeTime > LASER_CHARGE_TIME_FOR_BULLET) {
+             // show pulsing 
+        }
         // ADAPTATION: Convert 2D game position to a 3D world position on the XZ plane.
         Vec3f player_pos_3d = {state->player.pos.x, 0.0f, state->player.pos.y};
         

@@ -16,17 +16,17 @@
 #define BULLET_WIDTH 0.03f
 #define BULLET_HEIGHT 0.05f
 #define BULLET_DAMAGE 10.0f
-#define LASER_CHARGE_TIME_FOR_BULLET 0.2f
-#define LASER_MAX_CHARGE_TIME 2.0f
+#define LASER_CHARGE_TIME_FOR_BULLET 1.0f
+#define LASER_MAX_CHARGE_TIME 4.0f
 #define LASER_WIDTH 0.04f
-#define LASER_DURATION 0.15f
-#define LASER_BASE_DAMAGE 50.0f
+#define LASER_DURATION 0.35f
+#define LASER_BASE_DAMAGE 100.0f
 
-#define ASTEROID_SPAWN_INTERVAL 1.5f
+#define ASTEROID_SPAWN_INTERVAL 4.5f
 #define ASTEROID_MIN_SPEED 0.2f
 #define ASTEROID_MAX_SPEED 0.6f
-#define ASTEROID_MIN_SIZE 0.08f
-#define ASTEROID_MAX_SIZE 0.2f
+#define ASTEROID_MIN_SIZE 0.2f
+#define ASTEROID_MAX_SIZE 0.5f
 
 typedef struct {
     float x, y;
@@ -97,7 +97,7 @@ static void handle_spawning(GameState* state, float dt);
 static void handle_collisions(GameState* state);
 static void draw_game(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas);
 static void world_to_screen(float wx, float wy, uint8_t* sx, uint8_t* sy);
-static void draw_filled_rect(JaDraw<WIDTH, HEIGHT>& canvas, uint8_t x, uint8_t y, uint8_t w, uint8_t h, bool white);
+static void draw_filled_rect(JaDraw<WIDTH, HEIGHT>& canvas, int x, int y, int w, int h, bool white);
 
 static float rand_float(float min, float max) {
     return min + ((float)rand() / RAND_MAX) * (max - min);
@@ -285,7 +285,7 @@ static void handle_spawning(GameState* state, float dt) {
             if (!state->asteroids[i].active) {
                 state->asteroids[i].active = true;
                 state->asteroids[i].pos.x = rand_float(-1.0f, 1.0f);
-                state->asteroids[i].pos.y = 1.1f; // Spawn just above the screen
+                state->asteroids[i].pos.y = 5.1f; // Spawn just above the screen
                 state->asteroids[i].vel.x = rand_float(-0.1f, 0.1f);
                 state->asteroids[i].vel.y = -rand_float(ASTEROID_MIN_SPEED, ASTEROID_MAX_SPEED);
                 state->asteroids[i].size = rand_float(ASTEROID_MIN_SIZE, ASTEROID_MAX_SIZE);
@@ -358,21 +358,24 @@ static void handle_collisions(GameState* state) {
 }
 
 // Helper to convert world coordinates [-1, 1] to screen pixels [0, Res-1]
-static void world_to_screen(float wx, float wy, uint8_t* sx, uint8_t* sy) {
-    *sx = (uint8_t)((wx + 1.0f) * 0.5f * WIDTH);
+static void world_to_screen(float wx, float wy, int* sx, int* sy) {
+    *sx = ((wx + 1.0f) * 0.5f * WIDTH);
     // Y is inverted: world +1 is top, screen 0 is top
-    *sy = (uint8_t)((-wy + 1.0f) * 0.5f * HEIGHT);
+    *sy = ((-wy + 1.0f) * 0.5f * HEIGHT);
 }
 
 // Helper to draw a simple filled rectangle
-static void draw_filled_rect(JaDraw<WIDTH, HEIGHT>& canvas, uint8_t x, uint8_t y, uint8_t w, uint8_t h, bool white) {
+static void draw_filled_rect(JaDraw<WIDTH, HEIGHT>& canvas, int x, int y, int w, int h, bool white) {
     // Clamp width and height to avoid overflow and infinite loops
     if (x >= WIDTH || y >= HEIGHT) return;
-    uint8_t max_w = (x + w > WIDTH) ? (WIDTH - x) : w;
-    uint8_t max_h = (y + h > HEIGHT) ? (HEIGHT - y) : h;
-    for (uint8_t i = x; i < x + max_w; ++i) {
-        for (uint8_t j = y; j < y + max_h; ++j) {
-            drawPixel(canvas, i, j, white);
+    int max_w = (x + w > WIDTH) ? (WIDTH - x) : w;
+    int max_h = (y + h > HEIGHT) ? (HEIGHT - y) : h;
+    for (int i = x; i < x + max_w; ++i) {
+        for (int j = y; j < y + max_h; ++j) {
+            if (i >= 0 && i < WIDTH && j >= 0 && j < HEIGHT)
+            {
+                drawPixel(canvas, i, j, white);
+            }
         }
     }
 }
@@ -400,20 +403,20 @@ static void draw_game(const GameState* state, JaDraw<WIDTH, HEIGHT>& canvas) {
         return;
     }
 
-    uint8_t sx, sy, sw, sh;
+    int sx, sy, sw, sh;
 
     // --- Draw Player ---
     world_to_screen(state->player.pos.x - PLAYER_WIDTH / 2.0f, state->player.pos.y + PLAYER_HEIGHT / 2.0f, &sx, &sy);
-    sw = (uint8_t)(PLAYER_WIDTH * WIDTH * 0.5f);
-    sh = (uint8_t)(PLAYER_HEIGHT * HEIGHT * 0.5f);
+    sw = (int)(PLAYER_WIDTH * WIDTH * 0.5f);
+    sh = (int)(PLAYER_HEIGHT * HEIGHT * 0.5f);
     draw_filled_rect(canvas, sx, sy, sw, sh, true);
 
     // --- Draw Bullets ---
     for (int i = 0; i < MAX_BULLETS; ++i) {
         if (state->bullets[i].active) {
             world_to_screen(state->bullets[i].pos.x - BULLET_WIDTH / 2.0f, state->bullets[i].pos.y + BULLET_HEIGHT / 2.0f, &sx, &sy);
-            sw = (uint8_t)(BULLET_WIDTH * WIDTH * 0.5f);
-            sh = (uint8_t)(BULLET_HEIGHT * HEIGHT * 0.5f);
+            sw = (int)(BULLET_WIDTH * WIDTH * 0.5f);
+            sh = (int)(BULLET_HEIGHT * HEIGHT * 0.5f);
             draw_filled_rect(canvas, sx, sy, sw, sh, true);
         }
     }
