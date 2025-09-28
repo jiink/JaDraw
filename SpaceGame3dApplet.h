@@ -128,39 +128,27 @@ const int QUAD_INDICES[] = {
 };
 const int QUAD_NUM_INDICES = 6;
 
-// --- A simple, Star Fox-style Spaceship Model ---
-// Centered at the origin, pointing forward along the -Z axis.
+
 const Vec3f SHIP_VERTICES[] = {
-    // Main Body (Pyramid)
-    { 0.0f,  0.0f, -0.75f}, // 0: Nose tip
-    { 0.2f,  0.15f, 0.5f }, // 1: Top Right Rear
-    { 0.2f, -0.15f, 0.5f }, // 2: Bottom Right Rear
-    {-0.2f, -0.15f, 0.5f }, // 3: Bottom Left Rear
-    {-0.2f,  0.15f, 0.5f }, // 4: Top Left Rear
-
-    // Wings
-    { 1.0f,  0.0f,  0.25f}, // 5: Right Wing Tip
-    {-1.0f,  0.0f,  0.25f}  // 6: Left Wing Tip
+    {0.000000f, 0.09429200f, -0.8442920f},     {0.000000f, -0.05570800f, 0.4057080f},
+    {-0.06993900f, 0.2442920f, 0.4057080f},     {0.06993900f, 0.2442920f, 0.4057080f},
+    {-0.8699390f, 0.09429200f, 0.1557080f},     {0.8699390f, 0.09429200f, 0.1557080f},
+    {-0.2704030f, 0.1381030f, -0.07282900f},     {0.2704030f, 0.1381030f, -0.07282900f},
+    {-0.8453970f, 0.05703800f, 0.1043630f},     {0.8453970f, 0.05703800f, 0.1043630f},
+    {-0.8453970f, 0.05703800f, 0.1043630f},     {-0.8048760f, 0.06294900f, -0.5191000f},
+    {-0.7264710f, 0.04886800f, 0.07942300f},     {0.7264710f, 0.04886800f, 0.07942300f},
+    {0.8048760f, 0.06294900f, -0.5191000f},
 };
-const int SHIP_NUM_VERTICES = 7;
 
-// 8 triangles, 3 indices per triangle
 const int SHIP_INDICES[] = {
-    // Main Body (4 triangles form the pyramid)
-    0, 4, 1,  // Top face
-    0, 1, 2,  // Right face
-    0, 2, 3,  // Bottom face
-    0, 3, 4,  // Left face
-
-    // Wings (2 triangles, one for each wing)
-    1, 2, 5,  // Right Wing (connects to the right side of the body)
-    4, 6, 3,  // Left Wing (connects to the left side of the body)
-    
-    // Back Panel (2 triangles to close the hole at the back)
-    1, 4, 3,
-    1, 3, 2
+    2, 1, 3, 4, 1, 2, 5, 3, 1, 4, 6, 1, 
+    0, 7, 1, 1, 7, 5, 1, 6, 0, 11, 12, 10, 
+    13, 14, 9
 };
-const int SHIP_NUM_INDICES = 24;
+
+const int SHIP_NUM_INDICES = 27;
+
+
 
 static GameInputData gameInputData;
 
