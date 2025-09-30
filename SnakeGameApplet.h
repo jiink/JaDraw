@@ -11,7 +11,7 @@
 #define WORLD_MAX_Y (1.0f)
 
 #define HISTORY_BUFFER_SIZE (MAX_SEGMENTS * 10) 
-#define SEGMENT_SPACING 8
+#define SEGMENT_SPACING 16
 
 // Radii are now used for both collision and drawing
 #define HEAD_RADIUS 0.1f
@@ -57,6 +57,11 @@ typedef struct {
     Player player;
     Fruit fruit;
     bool is_game_over;
+    // Speed scaling: start fast, then ease down over a number of fruits
+    int fruits_eaten;
+    float start_speed;
+    float target_speed;
+    int speed_ease_fruits; // number of fruits over which to ease speed
 } GameState;
 
 
@@ -164,13 +169,31 @@ static void player_add_segment(Player* p)
     unsigned int count = player_get_num_segments(p);
     if (count < MAX_SEGMENTS) {
         p->segments[count].active = true;
-        // Position and direction will be set in the update loop
+        // Initialize the new segment's position, direction and radius immediately
+        // so it doesn't flash at the origin for one frame. Use the history buffer
+        // to place it where the tail should be.
+        int histIndex = (p->historyIndex - (count * SEGMENT_SPACING) + HISTORY_BUFFER_SIZE) % HISTORY_BUFFER_SIZE;
+        p->segments[count].pos = p->headHistory[histIndex];
+        if (count > 0) {
+            // Copy direction and radius from previous segment to avoid visual jump
+            p->segments[count].dir = p->segments[count - 1].dir;
+            p->segments[count].radius = p->segments[count - 1].radius;
+        } else {
+            p->segments[count].dir = {1.0f, 0.0f};
+            p->segments[count].radius = HEAD_RADIUS;
+        }
     }
 }
 
 static void init_game(GameState* state)
 {
-    state->player.speed = 0.5f;
+    // Start with a high initial speed which will ease down over the first
+    // `speed_ease_fruits` fruits to `target_speed`.
+    state->start_speed = 0.9f;      // fast at the beginning
+    state->target_speed = 0.45f;    // slower steady speed after easing
+    state->speed_ease_fruits = 10;  // ease over 10 fruits
+    state->fruits_eaten = 0;
+    state->player.speed = state->start_speed;
     state->player.directionRad = 0.0f;
     state->player.historyIndex = 0;
     state->is_game_over = false;
@@ -196,7 +219,7 @@ static void init_game(GameState* state)
     respawn_fruit(&state->fruit);
 }
 
-// MODIFIED: Update function now handles game-over state and calculates segment properties for polygon drawing.
+// MODIFIED: Update function now handles game-over state and self-collision.
 static void update_player(GameState* state, float dt, int inputDir)
 {
     Player* player = &(state->player);
@@ -250,6 +273,28 @@ static void update_player(GameState* state, float dt, int inputDir)
         player->segments[i].radius = HEAD_RADIUS * scale;
     }
 
+    // --- NEW: Check for self-collision (more forgiving) ---
+    // Skip a larger neck region to avoid false positives when turning sharply.
+    // Also require deeper overlap before triggering game over by applying
+    // a collision_tolerance multiplier (<1.0 means closer required).
+    const unsigned int collision_neck_skip = 6; // skip first 6 segments (0..5)
+    const float collision_tolerance = 0.80f;    // require 80% of radii sum overlap
+    if (numSegments > collision_neck_skip) {
+        for (unsigned int i = collision_neck_skip; i < numSegments; ++i) {
+            const Segment* body_seg = &player->segments[i];
+            float dx_self = head->pos.x - body_seg->pos.x;
+            float dy_self = head->pos.y - body_seg->pos.y;
+            float distSq_self = dx_self * dx_self + dy_self * dy_self;
+            float radiiSum_self = head->radius + body_seg->radius;
+            float triggerDist = radiiSum_self * collision_tolerance;
+
+            if (distSq_self < triggerDist * triggerDist) {
+                state->is_game_over = true;
+                return;
+            }
+        }
+    }
+
     // --- Check for fruit collision ---
     float dx = head->pos.x - state->fruit.pos.x;
     float dy = head->pos.y - state->fruit.pos.y;
@@ -259,20 +304,51 @@ static void update_player(GameState* state, float dt, int inputDir)
     if (distSq < radiiSum * radiiSum) {
         player_add_segment(player);
         respawn_fruit(&state->fruit);
+        // --- Adjust speed: ease from start_speed to target_speed over
+        // the first `speed_ease_fruits` fruits eaten.
+        state->fruits_eaten += 1;
+        int easeCount = state->speed_ease_fruits;
+        if (easeCount <= 0) easeCount = 1;
+        float t = (float)state->fruits_eaten / (float)easeCount;
+        if (t > 1.0f) t = 1.0f;
+        // Linear interpolation
+        player->speed = state->start_speed + (state->target_speed - state->start_speed) * t;
     }
 }
 
-// MODIFIED: This function now uses draw_filled_polygon to render the snake.
-static void draw_game(GameState* state, JaDraw<WIDTH, HEIGHT>& canvas)
+// MODIFIED: This function now draws a pulsing border and bouncing game over text.
+static void draw_game(GameState* state, JaDraw<WIDTH, HEIGHT>& canvas, unsigned long millis)
 {
     canvas.clear(0);
+
+    // --- NEW: Draw Pulsing Border ---
+    float pulse_visibility = (cosf(millis / 400.0f) + 1.0f) * 0.5f; // Oscillates between 0 and 1
+    for (int x = 0; x < WIDTH; ++x) {
+        canvas.drawPixel(x, 0, Colors::White);
+        canvas.drawPixel(x, HEIGHT - 1, Colors::White);
+    }
+    for (int y = 1; y < HEIGHT - 1; ++y) {
+        canvas.drawPixel(0, y, Colors::White);
+        canvas.drawPixel(WIDTH - 1, y, Colors::White);
+    }
+    if (pulse_visibility > 0.2f) { // Flicker off briefly
+        for (int x = 1; x < WIDTH; ++x) {
+            canvas.drawPixel(x, 1, Colors::White);
+            canvas.drawPixel(x, HEIGHT - 2, Colors::White);
+        }
+        for (int y = 1; y < HEIGHT - 1; ++y) {
+            canvas.drawPixel(1, y, Colors::White);
+            canvas.drawPixel(WIDTH - 2, y, Colors::White);
+        }
+    }
 
     // --- Draw Fruit (as a circle) ---
     const float world_to_pixel_scale_y = (float)HEIGHT / (2.0f * WORLD_MAX_Y);
     int fruit_pixel_radius = (int)(FRUIT_RADIUS * world_to_pixel_scale_y);
     int fruit_px = (int)(((state->fruit.pos.x + WORLD_MAX_X) / (2.0f * WORLD_MAX_X)) * (WIDTH - 1));
     int fruit_py = (int)(((state->fruit.pos.y + WORLD_MAX_Y) / (2.0f * WORLD_MAX_Y)) * (HEIGHT - 1));
-    draw_filled_circle(canvas, fruit_px, fruit_py, FRUIT_RADIUS * world_to_pixel_scale_y, true);
+    float oscillate = 1.0f + cos(millis/256) * 0.2f;
+    draw_filled_circle(canvas, fruit_px, fruit_py, FRUIT_RADIUS * world_to_pixel_scale_y * oscillate, true);
 
     // --- Draw Player (as a polygon) ---
     unsigned int numSegments = player_get_num_segments(&state->player);
@@ -306,6 +382,17 @@ static void draw_game(GameState* state, JaDraw<WIDTH, HEIGHT>& canvas)
     
     // 3. Draw the final polygon
     draw_filled_polygon(canvas, pixel_points, point_count, true);
+
+    // MODIFIED: Game over text now bounces
+    if (state->is_game_over)
+    {
+        // Use millis to create a smooth bouncing effect
+        float bounce_offset = -abs(cosf(millis / 1400.0f) * 20.0f); // Bounce 4 pixels up/down
+        int text_y = 25 + (int)bounce_offset;
+
+        canvas.drawText("GAME OVER", 15, text_y + 1, 2, Colors::Black, false);
+        canvas.drawText("GAME OVER", 14, text_y, 2, Colors::White, false);
+    }
 }
 
 class SnakeGameApplet : public IApplet {
@@ -330,7 +417,8 @@ void SnakeGameApplet::loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputD
         init_game(&state);
         initialized = true;
     }
-    
+    static unsigned long millis = 0;
+    millis += (unsigned long)(dt * 1000.0f);   
     // If the game is over, wait for a button press to restart
     if (state.is_game_over) {
         if (inputs.pressed) {
@@ -345,8 +433,7 @@ void SnakeGameApplet::loop(JaDraw<WIDTH, HEIGHT>& canvas, float dt, const InputD
         update_player(&state, dt, inputDir);
     }
 
-    // Drawing is done every frame, regardless of game state
-    draw_game(&state, canvas);
+    draw_game(&state, canvas, millis);
 }
 
 const char* SnakeGameApplet::getName() const { return "Snake game"; }
