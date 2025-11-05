@@ -10,9 +10,6 @@
 #include "system.h"
 //#include "MyApplet.h"
 //#include "ClockApplet.h"
-//#include "SpaceGameApplet.h"
-#include "SpaceGame3dApplet.h"
-//#include "SnakeGameApplet.h"
 
 const int CANVAS_WIDTH = WIDTH;
 const int CANVAS_HEIGHT = HEIGHT;
@@ -68,7 +65,7 @@ int main(int argc, char* argv[]) {
     bool quit = false;
     SDL_Event e;
     float deltaTime = 0.016f;
-    SpaceGame3dApplet applet;
+    Applet applet;
     applet.setup();
     while (!quit) {
         while (SDL_PollEvent(&e) != 0) {
